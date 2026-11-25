@@ -61,9 +61,11 @@ export default function Layout() {
         aria-label="Navigasi utama"
       >
         <div className="sidebar-brand">
-          <span className="sidebar-brand-mark" aria-hidden="true">
-            S
-          </span>
+          <img
+            className="sidebar-brand-logo"
+            src={`${import.meta.env.BASE_URL}logo-icon.jpg`}
+            alt="Logo SINEVERSE"
+          />
           <span className="sidebar-brand-text">
             <strong>SINEVERSE</strong>
             <small>AI Headquarters</small>
