@@ -577,3 +577,28 @@ export async function listTaskLogs(): Promise<LiveTaskLog[]> {
     createdAt: String(row.created_at),
   }))
 }
+
+export interface LiveAuditLog {
+  id: string
+  actor: string
+  action: string
+  entity: string
+  createdAt: string
+}
+
+export async function listAuditLogs(): Promise<LiveAuditLog[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('audit_logs')
+    .select('id, actor, action, entity, created_at')
+    .order('created_at', { ascending: false })
+    .limit(20)
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    actor: String(row.actor),
+    action: String(row.action),
+    entity: String(row.entity),
+    createdAt: String(row.created_at),
+  }))
+}
