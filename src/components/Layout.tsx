@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { useSession } from '../lib/auth.ts'
 import { isSupabaseConfigured } from '../lib/supabase.ts'
 
 interface NavItem {
@@ -47,12 +48,14 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/monitoring', label: 'System Monitoring' },
       { to: '/security', label: 'Security & Audit' },
       { to: '/settings', label: 'Settings' },
+      { to: '/login', label: 'Login Founder' },
     ],
   },
 ]
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const session = useSession()
 
   return (
     <div className="app-shell">
@@ -78,7 +81,9 @@ export default function Layout() {
           </span>
           <span className="sidebar-founder-text">
             <strong>Founder</strong>
-            <small>Chief Executive</small>
+            <small>
+              {session ? session.user.email : 'Belum login'}
+            </small>
           </span>
         </div>
 
