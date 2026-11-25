@@ -1,0 +1,7 @@
+# Supabase CLI config for the SINEVERSE AI Headquarters project.
+# Only the scheduler overrides JWT verification: it is called by pg_cron
+# (no user JWT exists on that path) and enforces its own auth via the
+# x-cron-secret header instead. All other functions keep the default
+# verify_jwt = true.
+[functions.scheduler]
+verify_jwt = false
