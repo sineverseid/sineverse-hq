@@ -31,12 +31,16 @@ sineverse-hq/
 ├── vite.config.ts
 ├── tsconfig.json / tsconfig.app.json / tsconfig.node.json
 ├── .env.example                # Hanya kunci kosong — TIDAK ADA nilai kredensial
+├── public/
+│   ├── logo-icon.jpg           # Logo resmi SINEVERSE (ikon aplikasi)
+│   └── logo-lockup.jpg         # Logo resmi SINEVERSE (lockup + tagline)
 ├── src/
 │   ├── main.tsx                # Entry React
 │   ├── App.tsx                 # HashRouter + 16 rute modul
 │   ├── index.css               # Palet + layout sidebar/content + responsif HP
 │   ├── types.ts                # 13 divisi, status task, level approval, jadwal
 │   ├── lib/supabase.ts         # Klien Supabase HANYA dari env vars
+│   ├── lib/seed.ts             # Data awal HQ terverifikasi (dipakai sampai Supabase terhubung)
 │   ├── components/             # Layout, EmptyState, PageHeader
 │   └── pages/                  # 16 modul (lihat bawah)
 └── supabase/
@@ -69,8 +73,21 @@ npm run dev                  # pengembangan
 npm run build                # tsc -b && vite build — SATU-SATUNYA gerbang type-check
 ```
 
-Tanpa `.env.local`, aplikasi tetap jalan dan menampilkan status
-"Belum dikonfigurasi" — halaman tidak menganggap ada data.
+Tanpa `.env.local`, aplikasi tetap jalan dan menampilkan data awal HQ yang
+sudah terverifikasi (`src/lib/seed.ts`) beserta status "Belum dikonfigurasi" —
+data live dari Supabase menggantikannya setelah proyek terhubung.
+
+## Logo resmi + data awal
+
+- Logo resmi SINEVERSE TIDAK BOLEH dimodifikasi: `public/logo-icon.jpg`
+  (ikon aplikasi — dipakai sebagai mark sidebar dan favicon) dan
+  `public/logo-lockup.jpg` (lockup lengkap + tagline "LEARN. CREATE.
+  COLLABORATE.").
+- `src/lib/seed.ts` berisi data awal HQ yang sudah terverifikasi (registry
+  13 divisi + 14 agen, 7 integrasi, pemakaian Groq 16 req / 10.609 token /
+  Rp0, 2 entri Master Drive Index, 2 entri audit) — nilai yang sama di-seed
+  migrasi 001, jadi tampilan sebelum dan sesudah Supabase terhubung
+  menunjukkan angka yang sama. Data ini BUKAN karangan.
 
 ## Database (proyek Supabase HQ — TERPISAH)
 
@@ -165,12 +182,19 @@ dan tidak pernah menulis ke database HQ.
 Keputusan D-BARU-5 (penghapusan HQ lama) TIDAK dilakukan dari repo ini — itu
 pekerjaan retire terpisah setelah HQ baru lolos QA.
 
-## Status jujur (25 Nov 2026, ~21:55 WIB)
+## Status jujur (25 Nov 2026, ~22:35 WIB)
 
 SELESAI:
 
 - Scaffold frontend lengkap, `npm run build` LOLOS (`tsc -b && vite build`,
   87 modul, dist/ terbit).
+- Repo `sineverseid/sineverse-hq` dibuat + kode produksi diunggah (45 file,
+  17 commit) + GitHub Pages LIVE di https://sineverseid.github.io/sineverse-hq/
+  (build Actions run #15 lolos, deploy sukses setelah Pages diaktifkan).
+- Penyelarasan 100% dengan artefak preview `sineverse-ai-headquarters`:
+  logo resmi SINEVERSE dipasang (ikon sidebar + favicon), halaman
+  menampilkan data awal terverifikasi dari `src/lib/seed.ts` (14 agen,
+  13 divisi + Lead, 7 integrasi, pemakaian Groq, 2 entri Drive, log audit).
 - Migrasi SQL lengkap (44 tabel, 45 kebijakan RLS, 7 enum) — **hanya lolos
   parse (`pglast`, 204 statement), BELUM dieksekusi** ke Postgres/Supabase.
 - 6 Edge Function stub ditulis mengikuti pola standar Supabase — **belum
@@ -180,7 +204,6 @@ MASIH TERBLOKIR (bukan malam ini):
 
 - Proyek Supabase HQ belum dibuat (butuh dashboard Supabase + pembuatan
   proyek baru).
-- Repo `sineverseid/sineverse-hq` belum dibuat (butuh pembuatan repo GitHub).
 - UID Founder belum ada (belum ada proyek/Auth) — placeholder nol masih di
   migrasi dan di `_shared/auth.ts`; rute founder-only menolak semua orang
   sampai diganti.
