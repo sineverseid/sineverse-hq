@@ -250,8 +250,7 @@ export async function listInstructions(): Promise<ConversationEntry[]> {
  * (instruksi dari tab lain, balasan NARA) memanggil onChange supaya
  * halaman memuat ulang riwayat tanpa refresh.
  */
-export function subscribeConversation(onChange: () => void): () => void {
-  const client = supabase
+export function subscribeConversation(onChange: () => void): () => void {  const client = supabase
   if (!client) return () => {}
   const channel = client
     .channel('command-center-replies')
@@ -318,5 +317,117 @@ export async function sendInstruction(
     ok: true,
     message: `${plan} ${body.message ?? ''}`.trim(),
     reply: body.reply ?? null,
+  }
+}
+
+/**
+ * Bacaan live untuk halaman Reports & Schedule (Founder saja, via RLS).
+ * Mengembalikan array kosong bila belum login atau belum ada data.
+ */
+export interface LiveReport {
+  id: string
+  reportType: string
+  title: string
+  summary: string
+  status: string
+  createdAt: string
+}
+
+export async function listReports(): Promise<LiveReport[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('reports')
+    .select('id, report_type, title, summary, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(10)
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    reportType: String(row.report_type),
+    title: String(row.title),
+    summary: String(row.summary ?? ''),
+    status: String(row.status),
+    createdAt: String(row.created_at),
+  }))
+}
+
+export interface LiveScheduledJob {
+  id: string
+  name: string
+  jobType: string
+  cronExpression: string
+  enabled: boolean
+  lastRunAt: string | null
+}
+
+export async function listScheduledJobs(): Promise<LiveScheduledJob[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('scheduled_jobs')
+    .select('id, name, job_type, cron_expression, enabled, last_run_at')
+    .order('cron_expression')
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    jobType: String(row.job_type),
+    cronExpression: String(row.cron_expression),
+    enabled: Boolean(row.enabled),
+    lastRunAt: row.last_run_at ? String(row.last_run_at) : null,
+  }))
+}
+
+export interface LiveJobExecution {
+  id: string
+  jobName: string
+  status: string
+  outputSummary: string | null
+  errorMessage: string | null
+  finishedAt: string | null
+}
+
+export async function listJobExecutions(): Promise<LiveJobExecution[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('job_execution_logs')
+    .select('id, scheduled_job_id, status, output_summary, error_message, finished_at')
+    .order('created_at', { ascending: false })
+    .limit(10)
+  if (error || !data) return []
+  const jobIds = [...new Set(data.map((row) => String(row.scheduled_job_id)))]
+  const { data: jobs } = await supabase
+    .from('scheduled_jobs')
+    .select('id, name')
+    .in('id', jobIds)
+  const names = new Map((jobs ?? []).map((j) => [String(j.id), String(j.name)]))
+  return data.map((row) => ({
+    id: String(row.id),
+    jobName: names.get(String(row.scheduled_job_id)) ?? 'Job',
+    status: String(row.status),
+    outputSummary: row.output_summary ? String(row.output_summary) : null,
+    errorMessage: row.error_message ? String(row.error_message) : null,
+    finishedAt: row.finished_at ? String(row.finished_at) : null,
+  }))
+}
+
+export interface LiveGroqUsage {
+  totalRequests: number
+  totalTokens: number
+}
+
+export async function getGroqUsage(): Promise<LiveGroqUsage> {
+  if (!supabase) return { totalRequests: 0, totalTokens: 0 }
+  const { data, error } = await supabase
+    .from('ai_usage_logs')
+    .select('prompt_tokens, completion_tokens')
+    .eq('provider', 'groq')
+  if (error || !data) return { totalRequests: 0, totalTokens: 0 }
+  return {
+    totalRequests: data.length,
+    totalTokens: data.reduce(
+      (sum, row) =>
+        sum + Number(row.prompt_tokens ?? 0) + Number(row.completion_tokens ?? 0),
+      0,
+    ),
   }
 }
