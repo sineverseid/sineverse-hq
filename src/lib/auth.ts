@@ -192,6 +192,34 @@ export interface InstructionResult {
  * Kirim instruksi ke Edge Function command-center.
  * Mengembalikan pesan jujur dari backend (atau error-nya), tanpa mengarang.
  */
+/**
+ * Riwayat instruksi Founder: tugas-tugas terbaru dari tabel tasks,
+ * urutan terbaru dulu. Dipakai Command Center supaya percakapan
+ * tidak hilang saat pindah halaman.
+ */
+export interface InstructionHistoryItem {
+  id: string
+  instruction: string
+  status: string
+  createdAt: string
+}
+
+export async function listInstructions(): Promise<InstructionHistoryItem[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, title, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(20)
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    instruction: String(row.title),
+    status: String(row.status),
+    createdAt: String(row.created_at),
+  }))
+}
+
 export async function sendInstruction(
   instruction: string,
 ): Promise<InstructionResult> {
