@@ -18,6 +18,32 @@ function formatTime(iso: string): string {
   })
 }
 
+/**
+ * Bersihkan sisa Markdown dari balasan NARA supaya enak dibaca:
+ * hapus ** dan awalan #, buang garis pemisah --- / |---|,
+ * dan ubah baris tabel | a | b | menjadi "a — b".
+ * Instruksi Founder tidak disentuh (tampil apa adanya).
+ */
+function stripMarkdown(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      let clean = line.replace(/\*\*/g, '').replace(/^#{1,6}\s*/, '')
+      if (/^[\s|:-]+$/.test(clean)) return ''
+      if (/^\|.*\|$/.test(clean)) {
+        clean = clean
+          .split('|')
+          .map((cell) => cell.trim())
+          .filter(Boolean)
+          .join(' — ')
+      }
+      return clean
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export default function CommandCenter() {
   const session = useSession()
   const [backend, setBackend] = useState<BackendStatus>('loading')
@@ -139,9 +165,18 @@ export default function CommandCenter() {
           ) : (
             <ul className="list">
               {sent.map((item) => (
-                <li className="list-row" key={item.id}>
+                <li
+                  className={`list-row${item.kind === 'reply' ? ' list-row-reply' : ''}`}
+                  key={item.id}
+                >
                   <span className="list-row-main">
-                    <strong>{item.text}</strong>
+                    {item.kind === 'reply' ? (
+                      <span className="chat-reply-text">
+                        {stripMarkdown(item.text)}
+                      </span>
+                    ) : (
+                      <strong>{item.text}</strong>
+                    )}
                     <small>
                       {formatTime(item.createdAt)} — {item.sub}
                     </small>
