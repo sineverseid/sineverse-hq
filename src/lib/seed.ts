@@ -499,6 +499,7 @@ export interface SeedDriveEntry {
   fileName: string
   version: string
   folder: string
+  folderUrl: string
   division: string
   owner: string
   fileDate: string
@@ -510,6 +511,8 @@ export const SEED_DRIVE_ENTRIES: SeedDriveEntry[] = [
     fileName: 'HANDOVER-2026-11-25.md',
     version: 'FINAL',
     folder: '10_OPERATIONS',
+    folderUrl:
+      'https://drive.google.com/drive/folders/1vsNeXEUwLEyX_4M3ID-tHR8R2E9amyrm',
     division: 'Operations & Governance',
     owner: 'NARA',
     fileDate: '25 Nov 2026',
@@ -519,10 +522,343 @@ export const SEED_DRIVE_ENTRIES: SeedDriveEntry[] = [
     fileName: 'sineverse-db-2026-11-25.sql.gz',
     version: 'v1',
     folder: '11_BACKUP & DISASTER RECOVERY',
+    folderUrl:
+      'https://drive.google.com/drive/folders/1HyZFJdEOt_JxCe9wMk2svN0vYtBKOrYe',
     division: 'Operations & Governance',
     owner: 'NARA',
     fileDate: '25 Nov 2026',
     status: 'verified',
+  },
+]
+
+/** Tautan kanonis folder Google Drive dari ID-nya. */
+export function driveFolderUrl(id: string): string {
+  return `https://drive.google.com/drive/folders/${id}`
+}
+
+/** Folder induk Drive HQ yang dipakai lagi (bukan folder baru). */
+export const SEED_DRIVE_ROOT = {
+  name: 'SINEVERSE',
+  id: '1yR7MBXjWE2W0PpjXzbG_aOqvooj8W0QG',
+  url: 'https://drive.google.com/drive/folders/1yR7MBXjWE2W0PpjXzbG_aOqvooj8W0QG',
+}
+
+export interface SeedDriveFolder {
+  name: string
+  id: string
+  subfolders: string[]
+}
+
+/** Struktur live SINEVERSE ORGANIZATION — 18 folder, terverifikasi via Drive API 25 Nov 2026. */
+export const SEED_DRIVE_ORGANIZATION: SeedDriveFolder[] = [
+  {
+    name: '00_FOUNDER & EXECUTIVE REPORTS',
+    id: '19bbKn9xspZAjmeTj2q_qa5SeQhogCsiz',
+    subfolders: [
+      'Approvals',
+      'Daily',
+      'Executive Briefings',
+      'Founder Decisions',
+      'Monthly Reports',
+      'Weekly',
+    ],
+  },
+  {
+    name: '01_DIGITAL PRODUCT & ENGINEERING',
+    id: '1AdfdvKif-kehxzlRtKtkZQu9SRD9hwvg',
+    subfolders: [
+      'Architecture',
+      'Backend',
+      'Code Reviews',
+      'Completed',
+      'Database',
+      'Development Deliverables',
+      'Frontend',
+      'Infrastructure',
+      'Planning',
+      'Reports',
+      'Technical Research',
+    ],
+  },
+  {
+    name: '02_ACADEMIC & CURRICULUM',
+    id: '1f1oJfutXIeIOlmNTKDTvJg1-4rBjgz-a',
+    subfolders: [
+      'Assessment Rubrics',
+      'Assignments',
+      'Completed',
+      'Course Modules',
+      'Curriculum',
+      'Learning Materials',
+      'Presentation',
+      'Reports',
+      'Research',
+      'Video Materials',
+    ],
+  },
+  {
+    name: '03_MARKETING & CREATIVE',
+    id: '1IUmv-JH0g81yqrQY_SN-BGTQKs7M6YQw',
+    subfolders: [
+      'Brand Assets',
+      'Campaigns',
+      'Completed',
+      'Content Calendar',
+      'Graphic Design',
+      'Instagram',
+      'Marketing Strategy',
+      'Reports',
+      'Social Media',
+      'Threads',
+      'TikTok',
+      'Video Production',
+      'YouTube',
+    ],
+  },
+  {
+    name: '04_COMMUNITY & PARTNERSHIP',
+    id: '1bLEPTkOCuefRz7Q1V_NEDvDXbdQUy9Ng',
+    subfolders: [
+      'Collaboration',
+      'Community Strategy',
+      'Completed',
+      'Mentor Community',
+      'Partnership Proposals',
+      'Reports',
+      'School Partnership',
+      'Student Community',
+    ],
+  },
+  {
+    name: '05_UI UX & PRODUCT RESEARCH',
+    id: '1ENZuic_X-MZGTlmsG47B9S2euTzMw6kM',
+    subfolders: [
+      'Completed',
+      'Prototypes',
+      'Reports',
+      'UI Design',
+      'UX Audit',
+      'Usability Testing',
+      'User Flows',
+      'User Research',
+      'Wireframes',
+    ],
+  },
+  {
+    name: '06_AI INNOVATION & RESEARCH',
+    id: '1voPIHuvLINOGtuwxwBS9aObImrcV_T-V',
+    subfolders: [
+      'AI Architecture',
+      'AI Evaluation',
+      'AI Prompts',
+      'AI Research',
+      'Automation',
+      'Claude Experiments',
+      'Completed',
+      'GPT Experiments',
+      'Reports',
+    ],
+  },
+  {
+    name: '07_QA & SECURITY',
+    id: '13FXCz7516JbRvLM2EnTKYeqVzb4uyuMr',
+    subfolders: [
+      'Bug Reports',
+      'Completed',
+      'QA Plans',
+      'Release Approval',
+      'Reports',
+      'Security Audits',
+      'Test Cases',
+      'Testing Results',
+      'Vulnerability Reports',
+    ],
+  },
+  {
+    name: '08_GROWTH & DATA ANALYTICS',
+    id: '1pDWYaey7JS7LxAfYSzd_eFC7W7571qqJ',
+    subfolders: [
+      'Completed',
+      'Data Analysis',
+      'Growth Strategy',
+      'KPI Reports',
+      'Market Research',
+      'Performance Analytics',
+      'Reports',
+      'User Insights',
+    ],
+  },
+  {
+    name: '09_CUSTOMER SUCCESS & HELPDESK',
+    id: '1SzkLO-JkszzmIGokugIuwJU-WigAEScz',
+    subfolders: [
+      'Completed',
+      'Customer Insights',
+      'FAQ',
+      'Helpdesk SOP',
+      'Incident Reports',
+      'SINEBOT',
+      'Support Reports',
+    ],
+  },
+  {
+    name: '10_OPERATIONS & GOVERNANCE',
+    id: '1vsNeXEUwLEyX_4M3ID-tHR8R2E9amyrm',
+    subfolders: [
+      'Administration',
+      'Completed',
+      'Meeting Minutes',
+      'Organization',
+      'Policies',
+      'Reports',
+      'SOP',
+      'Workflows',
+    ],
+  },
+  {
+    name: '11_FILM FESTIVAL & EVENT',
+    id: '1m_elRWQsXZx7eXy8Ovnc1g9KfAmrAV0j',
+    subfolders: [],
+  },
+  {
+    name: '12_TALENT & MENTOR DEVELOPMENT',
+    id: '1uQXuMXgnzJz0hsk_vIefGSJXjpq715ea',
+    subfolders: [],
+  },
+  {
+    name: '13_RESEARCH & INDUSTRY RELATIONS',
+    id: '16SK14KXJdDKSnyH-BdJHx4IIMsXxY364',
+    subfolders: [],
+  },
+  {
+    name: '14_CROSS-DEPARTMENT PROJECTS',
+    id: '1JWZGx7XJRiK4xLydXc-U4w185FAnWsWt',
+    subfolders: [
+      'Active Projects',
+      'Collaboration Reports',
+      'Final Deliverables',
+      'Project Documentation',
+      'Shared Deliverables',
+    ],
+  },
+  {
+    name: '15_SINEVERSE MASTER ARCHIVE',
+    id: '1BX9JHJ_sFWGQIoSxl6vgHpCiX7EAF7Z8',
+    subfolders: [],
+  },
+  {
+    name: '16_AGENT WORKSPACE & KNOWLEDGE',
+    id: '114Sy7M2PK1dlqjNPEYc39dMWM3LDNOs3',
+    subfolders: [
+      'Agent Deliverables Index',
+      'Agent Instructions',
+      'Agent Knowledge',
+      'Agent Performance',
+      'Agent Registry',
+      'Agent Research',
+      'Agent Work Logs',
+    ],
+  },
+  {
+    name: '17_TEMPLATES & STANDARD DOCUMENTS',
+    id: '1FyUQmfbKLLesMZcbGfuU3sN-r3FX5hOY',
+    subfolders: [
+      'Presentation Templates',
+      'Project Templates',
+      'Proposal Templates',
+      'Report Templates',
+      'Research Templates',
+      'SOP Templates',
+    ],
+  },
+]
+
+/** Struktur live SINEVERSE MASTER ARCHIVE — 17 folder, terverifikasi via Drive API 25 Nov 2026. */
+export const SEED_DRIVE_ARCHIVE: SeedDriveFolder[] = [
+  {
+    name: '00_FOUNDER & STRATEGIC DECISIONS',
+    id: '1m9Wi6nHF9R2D4mb36dAMGuGC4bavPMPD',
+    subfolders: [],
+  },
+  {
+    name: '01_SOURCE CODE & REPOSITORIES',
+    id: '1HEyKSFhRMwLEuFdGxnY3rkzAGC9cLrxS',
+    subfolders: [],
+  },
+  {
+    name: '02_DATABASE & BACKEND',
+    id: '18ieGjlBVhJRaB1TNpZomvctapK0sr2im',
+    subfolders: [],
+  },
+  {
+    name: '03_INFRASTRUCTURE & DEPLOYMENT',
+    id: '1_wMaDpxhbQeb5yeB9QWv03xoM_Ue4KGd',
+    subfolders: [],
+  },
+  {
+    name: '04_DESIGN & BRAND ASSETS',
+    id: '1He9jQ0rwyBovLsdFtpi4a85kAnO3dvp8',
+    subfolders: [],
+  },
+  {
+    name: '05_ACADEMY & CURRICULUM',
+    id: '1y7qqSleCHU4VmJneK71GnGIToERfDaRr',
+    subfolders: [],
+  },
+  {
+    name: '06_STUDENT & MENTOR OPERATIONS',
+    id: '1ar0eJXohha8BN3MCw0ckm1LkwrB_ioYq',
+    subfolders: [],
+  },
+  {
+    name: '07_PROJECTS & COMMUNITY',
+    id: '1d98hyS6m6wysm9ljPbksOQ1Jknf3LDOy',
+    subfolders: [],
+  },
+  {
+    name: '08_AI SYSTEMS & PROMPTS',
+    id: '1AWIUKMbH7TLLbexPgOz5rScFJ84SO7mv',
+    subfolders: [],
+  },
+  {
+    name: '09_API & THIRD PARTY INTEGRATIONS',
+    id: '1SaJ-yAVkjeLgO9PFC52Jcb6wW8kiR2EE',
+    subfolders: [],
+  },
+  {
+    name: '10_SECURITY & ACCESS CONTROL',
+    id: '1bnKKXadKkz8i-PUJBBedsR6lrAOGlUUM',
+    subfolders: [],
+  },
+  {
+    name: '11_BACKUP & DISASTER RECOVERY',
+    id: '1HyZFJdEOt_JxCe9wMk2svN0vYtBKOrYe',
+    subfolders: [],
+  },
+  {
+    name: '12_QA & TESTING',
+    id: '1WK5T2xzvRUZvC7RX1ZsU9TUlrVGPQmcF',
+    subfolders: [],
+  },
+  {
+    name: '13_RELEASE & CHANGELOG',
+    id: '1e61PijaKdF7-b0fKEKogGmYk-bseiw1D',
+    subfolders: [],
+  },
+  {
+    name: '14_ORGANIZATION & REPORTS',
+    id: '1Y7JqeVf_L_2OCpkEzdIsScksUtPZ7fB-',
+    subfolders: [],
+  },
+  {
+    name: '15_LEGAL & POLICIES',
+    id: '1MLismjamH8qHgHdA1kPR5tXq1znIKO80',
+    subfolders: [],
+  },
+  {
+    name: '16_ARCHIVE & HISTORICAL VERSIONS',
+    id: '1AKfnR0zJ06ULPVZATwfXofue6R2P9ZhB',
+    subfolders: [],
   },
 ]
 
