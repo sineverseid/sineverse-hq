@@ -8,6 +8,7 @@ import Deliverables from './pages/Deliverables.tsx'
 import Departments from './pages/Departments.tsx'
 import DriveArchive from './pages/DriveArchive.tsx'
 import KnowledgeBase from './pages/KnowledgeBase.tsx'
+import Login from './pages/Login.tsx'
 import Monitoring from './pages/Monitoring.tsx'
 import Providers from './pages/Providers.tsx'
 import Reports from './pages/Reports.tsx'
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="monitoring" element={<Monitoring />} />
           <Route path="security" element={<SecurityAudit />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="login" element={<Login />} />
           <Route path="*" element={<Dashboard />} />
         </Route>
       </Routes>

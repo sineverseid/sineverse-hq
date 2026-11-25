@@ -566,6 +566,63 @@ h3 {
   cursor: not-allowed;
 }
 
+/* ---------- Forms (login, MFA) ---------- */
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  max-width: 420px;
+}
+
+.form-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.form-input {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: var(--font);
+  font-size: 14px;
+  background: var(--white);
+  color: var(--text);
+}
+
+.form-input:focus {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+}
+
+.form-error {
+  color: #9b2c2c;
+  font-size: 14px;
+  margin: 0 0 14px;
+}
+
+.qr-box {
+  margin: 16px 0;
+  padding: 12px;
+  display: inline-block;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.qr-box svg {
+  display: block;
+  width: 200px;
+  height: 200px;
+}
+
+.mono {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
 /* ---------- Responsive: mobile single column ---------- */
 
 @media (max-width: 900px) {
