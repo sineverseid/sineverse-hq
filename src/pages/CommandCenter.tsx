@@ -3,6 +3,7 @@ import EmptyState from '../components/EmptyState.tsx'
 import PageHeader from '../components/PageHeader.tsx'
 import {
   checkCommandCenterBackend,
+  listInstructions,
   sendInstruction,
   useSession,
   type BackendStatus,
@@ -15,16 +16,45 @@ interface SentInstruction {
   time: string
 }
 
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export default function CommandCenter() {
   const session = useSession()
   const [backend, setBackend] = useState<BackendStatus>('loading')
   const [instruction, setInstruction] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState<SentInstruction[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
     checkCommandCenterBackend().then(setBackend)
   }, [])
+
+  // Riwayat diambil dari database supaya tidak hilang saat pindah halaman.
+  useEffect(() => {
+    if (!session) {
+      setSent([])
+      return
+    }
+    setHistoryLoading(true)
+    listInstructions()
+      .then((rows) =>
+        setSent(
+          rows.map((row) => ({
+            instruction: row.instruction,
+            result: `Rencana dibuat (${row.status}).`,
+            ok: true,
+            time: formatTime(row.createdAt),
+          })),
+        ),
+      )
+      .finally(() => setHistoryLoading(false))
+  }, [session])
 
   const backendReady = backend === 'deployed'
   const loggedIn = Boolean(session)
@@ -38,15 +68,28 @@ export default function CommandCenter() {
     const result = await sendInstruction(text)
     setSending(false)
     setInstruction('')
-    setSent((previous) => [
-      ...previous,
-      {
-        instruction: text,
-        result: result.message,
-        ok: result.ok,
-        time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-      },
-    ])
+    if (!result.ok) {
+      setSent((previous) => [
+        ...previous,
+        {
+          instruction: text,
+          result: result.message,
+          ok: false,
+          time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        },
+      ])
+      return
+    }
+    // Muat ulang dari database supaya entri baru muncul sekali saja.
+    const rows = await listInstructions()
+    setSent(
+      rows.map((row) => ({
+        instruction: row.instruction,
+        result: `Rencana dibuat (${row.status}).`,
+        ok: true,
+        time: formatTime(row.createdAt),
+      })),
+    )
   }
 
   return (
@@ -89,10 +132,15 @@ export default function CommandCenter() {
           )}
         </p>
         <div className="chat-box">
-          {sent.length === 0 ? (
+          {historyLoading ? (
+            <EmptyState
+              title="Memuat percakapan…"
+              description="Mengambil riwayat instruksi dari database."
+            />
+          ) : sent.length === 0 ? (
             <EmptyState
               title="Belum ada percakapan"
-              description="Belum ada instruksi yang dikirim ke NARA. Percakapan akan tercatat di sini setelah backend Command Center aktif."
+              description="Belum ada instruksi yang dikirim ke NARA. Instruksi yang dikirim akan tercatat di sini."
             />
           ) : (
             <ul className="list">
