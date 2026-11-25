@@ -120,6 +120,49 @@ export async function verifyTotp(
   return { error: null }
 }
 
+/**
+ * Level autentikasi sesi saat ini (aal1 = kata sandi saja,
+ * aal2 = kata sandi + TOTP). Null bila tidak bisa diperiksa.
+ */
+export async function getAssuranceLevel(): Promise<{
+  current: string | null
+  next: string | null
+} | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (error || !data) return null
+  return { current: data.currentLevel, next: data.nextLevel }
+}
+
+/**
+ * Verifikasi kode TOTP saat login (sesi aal1 → aal2).
+ * Memakai faktor TOTP terverifikasi pada akun yang sedang login.
+ */
+export async function verifyLoginTotp(
+  code: string,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase belum dikonfigurasi.' }
+  const { data: factors, error: factorsError } =
+    await supabase.auth.mfa.listFactors()
+  if (factorsError || !factors) {
+    return { error: 'Tidak dapat memeriksa faktor MFA.' }
+  }
+  const factor = factors.totp.find((f) => f.status === 'verified')
+  if (!factor) return { error: 'Tidak ada faktor TOTP terverifikasi.' }
+  const { data: challenge, error: challengeError } =
+    await supabase.auth.mfa.challenge({ factorId: factor.id })
+  if (challengeError || !challenge) {
+    return { error: 'Tantangan MFA gagal dibuat. Coba lagi.' }
+  }
+  const { error } = await supabase.auth.mfa.verify({
+    factorId: factor.id,
+    challengeId: challenge.id,
+    code,
+  })
+  if (error) return { error: 'Kode salah atau sudah kedaluwarsa. Coba lagi.' }
+  return { error: null }
+}
+
 export type BackendStatus = 'loading' | 'not-configured' | 'deployed' | 'not-deployed'
 
 /**
