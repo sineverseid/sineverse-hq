@@ -1,8 +1,24 @@
+import { useEffect, useState } from 'react'
 import EmptyState from '../components/EmptyState.tsx'
 import PageHeader from '../components/PageHeader.tsx'
-import { SEED_GROQ_USAGE } from '../lib/seed.ts'
+import {
+  getGroqUsage,
+  useSession,
+  type LiveGroqUsage,
+} from '../lib/auth.ts'
 
 export default function Providers() {
+  const session = useSession()
+  const [usage, setUsage] = useState<LiveGroqUsage>({
+    totalRequests: 0,
+    totalTokens: 0,
+  })
+
+  useEffect(() => {
+    if (!session) return
+    getGroqUsage().then(setUsage)
+  }, [session])
+
   return (
     <div>
       <PageHeader
@@ -12,9 +28,7 @@ export default function Providers() {
 
       <section className="card" aria-label="Provider AI">
         <h2>Groq</h2>
-        <p>
-          Provider AI eksternal HQ (free tier) — {SEED_GROQ_USAGE.model}.
-        </p>
+        <p>Provider AI eksternal HQ (free tier) — openai/gpt-oss-120b.</p>
         <p>
           Status:{' '}
           <span className="status-badge status-badge-ok">Terverifikasi</span>
@@ -24,24 +38,15 @@ export default function Providers() {
           dan tidak pernah disimpan di aplikasi ini.
         </p>
         <p>
-          Pemakaian tercatat: {SEED_GROQ_USAGE.totalRequests} request ·{' '}
-          {SEED_GROQ_USAGE.totalTokens.toLocaleString('id-ID')} token · Rp
-          {SEED_GROQ_USAGE.totalCostIdr}.
+          Pemakaian tercatat di HQ baru:{' '}
+          {usage.totalRequests} request ·{' '}
+          {usage.totalTokens.toLocaleString('id-ID')} token · Rp0.
         </p>
-        <ul className="list">
-          {SEED_GROQ_USAGE.records.map((record) => (
-            <li className="list-row" key={record.note.slice(0, 32)}>
-              <span className="list-row-main">
-                <strong>
-                  {record.requests} req ·{' '}
-                  {record.tokens.toLocaleString('id-ID')} token
-                </strong>
-                <small>{record.note}</small>
-              </span>
-              <span className="list-time">{record.recordedOn}</span>
-            </li>
-          ))}
-        </ul>
+        <p>
+          Pemakaian dihitung sejak HQ baru aktif 26 Nov 2026. Sebagai
+          riwayat, HQ lama (Telegram) memakai 16 request · 10.609 token · Rp0
+          (audit §21, 25 Nov 2026).
+        </p>
       </section>
 
       <section className="section" aria-label="Provider lain">

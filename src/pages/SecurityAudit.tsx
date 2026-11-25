@@ -1,14 +1,44 @@
 import { useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader.tsx'
-import { getMfaStatus, type MfaStatus } from '../lib/auth.ts'
-import { SEED_ACTIVITY } from '../lib/seed.ts'
+import {
+  getMfaStatus,
+  listAuditLogs,
+  useSession,
+  type LiveAuditLog,
+  type MfaStatus,
+} from '../lib/auth.ts'
+
+function formatWib(iso: string): string {
+  return new Date(iso).toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 export default function SecurityAudit() {
+  const session = useSession()
   const [mfaStatus, setMfaStatus] = useState<MfaStatus>('loading')
+  const [audit, setAudit] = useState<LiveAuditLog[]>([])
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     getMfaStatus().then(setMfaStatus)
   }, [])
+
+  useEffect(() => {
+    if (!session) {
+      setAudit([])
+      setLoaded(false)
+      return
+    }
+    listAuditLogs().then((live) => {
+      setAudit(live)
+      setLoaded(true)
+    })
+  }, [session])
 
   return (
     <div>
@@ -40,19 +70,29 @@ export default function SecurityAudit() {
       <section className="section" aria-label="Log audit">
         <h2>Log Audit</h2>
         <div className="card">
-          <ul className="list">
-            {SEED_ACTIVITY.map((activity) => (
-              <li className="list-row" key={activity.event}>
-                <span className="list-row-main">
-                  <strong>{activity.detail}</strong>
-                  <small>
-                    {activity.actor} — {activity.timeWib}
-                  </small>
-                </span>
-                <span className="status-badge">{activity.event}</span>
-              </li>
-            ))}
-          </ul>
+          {loaded && audit.length > 0 ? (
+            <ul className="list">
+              {audit.map((entry) => (
+                <li className="list-row" key={entry.id}>
+                  <span className="list-row-main">
+                    <strong>
+                      {entry.action} — {entry.entity}
+                    </strong>
+                    <small>
+                      {entry.actor} — {formatWib(entry.createdAt)}
+                    </small>
+                  </span>
+                  <span className="status-badge">{entry.action}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>
+              {!session
+                ? 'Login sebagai Founder untuk melihat log audit.'
+                : 'Belum ada entri audit. Log terisi saat ada keputusan persetujuan atau panggilan platform.'}
+            </p>
+          )}
         </div>
       </section>
     </div>

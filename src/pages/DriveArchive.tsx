@@ -53,6 +53,12 @@ export default function DriveArchive() {
           — bukan folder baru.
         </p>
         <p>
+          Struktur folder di bawah ini diverifikasi langsung via Drive API
+          pada 25 Nov 2026 (18 folder ORGANIZATION + 17 folder MASTER
+          ARCHIVE). Isi folder dapat berubah — buka tautan Drive untuk kondisi
+          terbaru.
+        </p>
+        <p>
           <a href={SEED_DRIVE_ROOT.url} target="_blank" rel="noreferrer">
             {SEED_DRIVE_ROOT.name} — Buka di Google Drive →
           </a>
