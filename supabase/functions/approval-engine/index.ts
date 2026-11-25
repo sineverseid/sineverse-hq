@@ -1,20 +1,20 @@
 // approval-engine — SINEVERSE AI Headquarters Edge Function.
-// STUB — NOT DEPLOYED. No HQ Supabase project exists yet.
+// DEPLOYED v2 (26 Nov 2026). Decides approval requests (approve/reject),
+// founder-only, MFA (aal2) required.
 // Required env vars (Deno.env only): SUPABASE_URL, SUPABASE_ANON_KEY,
-// SUPABASE_SERVICE_ROLE_KEY. FOUNDER_UID lives in ../_shared/auth.ts and
-// must be replaced with the real founder auth user id at deploy time.
-// What remains: aal2 (MFA) enforcement once Auth MFA is configured;
-// notification of the requester on decision; any downstream effect of an
-// approval (no side effect is executed by this stub beyond the DB rows below).
-//
-// NOTE (sensitive action): an aal2 (MFA) check MUST be enforced on this route
-// once Auth MFA is configured — verify user.app_metadata / the AMR claim
-// (aal2) before deciding, and reject with 403 when the session is only aal1.
+// SUPABASE_SERVICE_ROLE_KEY. FOUNDER_UID lives in ../_shared/auth.ts.
+// Fixes v2: founder check (isFounderUidConfigured compared against the real
+// UID, so it always returned false and every decision got 403); aal2
+// enforcement (a session that only completed the password step is rejected);
+// approval_actions insert used columns decided_by/decided_at, which do not
+// exist on that table (it has actor + created_at); audit_logs insert used
+// entity_type (the column is entity) and a plain string for detail (jsonb).
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { corsHeaders, handleOptions, jsonResponse } from "../_shared/cors.ts";
 import {
   FOUNDER_UID,
+  getAalFromRequest,
   getServiceClient,
   getUserFromRequest,
   isFounderUidConfigured,
@@ -36,11 +36,15 @@ serve(async (req: Request) => {
   }
 
   // Founder-only: compare the auth user id to FOUNDER_UID.
-  // While FOUNDER_UID is still the placeholder, nobody is the founder.
   if (!isFounderUidConfigured() || user.id !== FOUNDER_UID) {
     return jsonResponse({ error: "Forbidden" }, 403);
   }
-  // TODO (MFA): enforce aal2 here once Auth MFA is configured (see header).
+
+  // MFA required: the session must have completed the second factor (aal2).
+  // A password-only session (aal1) cannot decide approvals.
+  if (getAalFromRequest(req) !== "aal2") {
+    return jsonResponse({ error: "MFA required" }, 403);
+  }
 
   let body: unknown;
   try {
@@ -109,9 +113,8 @@ serve(async (req: Request) => {
   const { error: actionError } = await supabase.from("approval_actions").insert({
     approval_request_id,
     action,
+    actor: user.id,
     note,
-    decided_by: user.id,
-    decided_at: decidedAt,
   });
   if (actionError) {
     console.error("approval-engine: approval_actions insert failed");
@@ -137,10 +140,10 @@ serve(async (req: Request) => {
   const { error: auditError } = await supabase.from("audit_logs").insert({
     actor: user.id,
     action: `approval_${action}`,
-    entity_type: "approval_request",
+    entity: "approval_request",
     entity_id: approval_request_id,
-    // Never store personal data or the full request payload in audit detail.
-    detail: `Approval request ${newStatus}.`,
+    // detail is jsonb — store a small object, never the full payload.
+    detail: { status: newStatus },
   });
   if (auditError) {
     console.error("approval-engine: audit_logs insert failed");
