@@ -1,5 +1,6 @@
 // platform-api-client — SINEVERSE AI Headquarters Edge Function.
-// STUB — NOT DEPLOYED. No HQ Supabase project exists yet.
+// DEPLOYED v1 (26 Nov 2026). Returns 501 by design until the platform
+// exposes its read-only API (see below).
 // Required env vars (Deno.env only): SUPABASE_URL, SUPABASE_ANON_KEY,
 // SUPABASE_SERVICE_ROLE_KEY, PLATFORM_API_URL, PLATFORM_API_KEY.
 // What remains: the platform side. The platform read-only API endpoints
