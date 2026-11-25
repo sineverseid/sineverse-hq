@@ -5,16 +5,11 @@ import {
   checkCommandCenterBackend,
   listInstructions,
   sendInstruction,
+  subscribeConversation,
   useSession,
   type BackendStatus,
+  type ConversationEntry,
 } from '../lib/auth.ts'
-
-interface SentInstruction {
-  instruction: string
-  result: string
-  ok: boolean
-  time: string
-}
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('id-ID', {
@@ -28,32 +23,36 @@ export default function CommandCenter() {
   const [backend, setBackend] = useState<BackendStatus>('loading')
   const [instruction, setInstruction] = useState('')
   const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState<SentInstruction[]>([])
+  const [sent, setSent] = useState<ConversationEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
     checkCommandCenterBackend().then(setBackend)
   }, [])
 
-  // Riwayat diambil dari database supaya tidak hilang saat pindah halaman.
+  // Riwayat diambil dari database supaya tidak hilang saat pindah halaman,
+  // dan diperbarui otomatis lewat Realtime saat ada instruksi atau balasan baru.
   useEffect(() => {
     if (!session) {
       setSent([])
       return
     }
+    let mounted = true
     setHistoryLoading(true)
-    listInstructions()
-      .then((rows) =>
-        setSent(
-          rows.map((row) => ({
-            instruction: row.instruction,
-            result: `Rencana dibuat (${row.status}).`,
-            ok: true,
-            time: formatTime(row.createdAt),
-          })),
-        ),
-      )
-      .finally(() => setHistoryLoading(false))
+    const load = () =>
+      listInstructions().then((rows) => {
+        if (mounted) setSent(rows)
+      })
+    load().finally(() => {
+      if (mounted) setHistoryLoading(false)
+    })
+    const unsubscribe = subscribeConversation(() => {
+      void load()
+    })
+    return () => {
+      mounted = false
+      unsubscribe()
+    }
   }, [session])
 
   const backendReady = backend === 'deployed'
@@ -72,31 +71,26 @@ export default function CommandCenter() {
       setSent((previous) => [
         ...previous,
         {
-          instruction: text,
-          result: result.message,
+          id: `local-fail-${Date.now()}`,
+          kind: 'instruction' as const,
+          text,
+          sub: result.message,
+          createdAt: new Date().toISOString(),
           ok: false,
-          time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
         },
       ])
       return
     }
-    // Muat ulang dari database supaya entri baru muncul sekali saja.
-    const rows = await listInstructions()
-    setSent(
-      rows.map((row) => ({
-        instruction: row.instruction,
-        result: `Rencana dibuat (${row.status}).`,
-        ok: true,
-        time: formatTime(row.createdAt),
-      })),
-    )
+    // Muat ulang dari database supaya entri baru muncul sekali saja,
+    // beserta balasan NARA bila ada.
+    setSent(await listInstructions())
   }
 
   return (
     <div>
       <PageHeader
         title="NARA Command Center"
-        description="Kirim instruksi ke NARA, Executive Director AI Headquarters. Instruksi dieksekusi oleh agen divisi setelah backend aktif."
+        description="Kirim instruksi ke NARA, Executive Director AI Headquarters. Instruksi dibuat menjadi rencana tugas dan dijawab oleh NARA."
       />
 
       {backend === 'loading' ? (
@@ -107,7 +101,7 @@ export default function CommandCenter() {
         <div className="notice notice-info" role="status">
           <strong>Backend Command Center terhubung.</strong>
           Edge Function Command Center aktif. Instruksi yang dikirim dibuat
-          menjadi rencana tugas; eksekusi agen belum terkoneksi.
+          menjadi rencana tugas dan dijawab NARA.
         </div>
       ) : (
         <div className="notice" role="alert">
@@ -144,19 +138,25 @@ export default function CommandCenter() {
             />
           ) : (
             <ul className="list">
-              {sent.map((item, index) => (
-                <li className="list-row" key={`${item.time}-${index}`}>
+              {sent.map((item) => (
+                <li className="list-row" key={item.id}>
                   <span className="list-row-main">
-                    <strong>{item.instruction}</strong>
+                    <strong>{item.text}</strong>
                     <small>
-                      {item.time} — {item.result}
+                      {formatTime(item.createdAt)} — {item.sub}
                     </small>
                   </span>
-                  <span
-                    className={`status-badge${item.ok ? ' status-badge-ok' : ' status-badge-warn'}`}
-                  >
-                    {item.ok ? 'Terkirim' : 'Gagal'}
-                  </span>
+                  {item.kind === 'reply' ? (
+                    <span className="status-badge status-badge-ok">NARA</span>
+                  ) : item.ok === false ? (
+                    <span className="status-badge status-badge-warn">
+                      Gagal
+                    </span>
+                  ) : (
+                    <span className="status-badge status-badge-ok">
+                      Terkirim
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
