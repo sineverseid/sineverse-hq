@@ -431,3 +431,145 @@ export async function getGroqUsage(): Promise<LiveGroqUsage> {
     ),
   }
 }
+
+/**
+ * Bacaan live untuk Dashboard, Tasks, Approvals, Agents, Departments
+ * (Founder saja, via RLS). Array kosong bila belum login atau belum ada data.
+ * Status tugas di DB memakai snake_case; dipetakan ke kebab-case frontend.
+ */
+export interface LiveTask {
+  id: string
+  title: string
+  status: string
+  departmentId: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
+const DB_TASK_STATUS: Record<string, string> = {
+  in_progress: 'in-progress',
+  in_review: 'in-review',
+  awaiting_approval: 'awaiting-approval',
+}
+
+export async function listTasks(): Promise<LiveTask[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, title, status, department_id, created_at, completed_at')
+    .order('created_at', { ascending: false })
+    .limit(100)
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    title: String(row.title),
+    status: DB_TASK_STATUS[String(row.status)] ?? String(row.status),
+    departmentId: row.department_id ? String(row.department_id) : null,
+    createdAt: String(row.created_at),
+    completedAt: row.completed_at ? String(row.completed_at) : null,
+  }))
+}
+
+export interface LiveApprovalRequest {
+  id: string
+  actionName: string
+  level: string
+  reason: string
+  status: string
+  createdAt: string
+}
+
+export async function listApprovalRequests(): Promise<LiveApprovalRequest[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('approval_requests')
+    .select('id, action_name, level, reason, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    actionName: String(row.action_name),
+    level: String(row.level),
+    reason: String(row.reason ?? ''),
+    status: String(row.status),
+    createdAt: String(row.created_at),
+  }))
+}
+
+export interface LiveAgent {
+  id: string
+  name: string
+  division: string
+  role: string
+  status: string
+  model: string
+  departmentId: string | null
+}
+
+export async function listAgents(): Promise<LiveAgent[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('ai_agents')
+    .select('id, name, division, role, status, model, department_id')
+    .order('created_at')
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    division: String(row.division),
+    role: String(row.role),
+    status: String(row.status),
+    model: String(row.model),
+    departmentId: row.department_id ? String(row.department_id) : null,
+  }))
+}
+
+export interface LiveDepartment {
+  id: string
+  name: string
+  slug: string
+  leadAgentId: string | null
+  sortOrder: number
+}
+
+export async function listDepartments(): Promise<LiveDepartment[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('departments')
+    .select('id, name, slug, lead_agent_id, sort_order')
+    .order('sort_order')
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    slug: String(row.slug),
+    leadAgentId: row.lead_agent_id ? String(row.lead_agent_id) : null,
+    sortOrder: Number(row.sort_order ?? 0),
+  }))
+}
+
+export interface LiveTaskLog {
+  id: string
+  taskId: string
+  eventType: string
+  note: string
+  createdAt: string
+}
+
+export async function listTaskLogs(): Promise<LiveTaskLog[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('task_logs')
+    .select('id, task_id, event_type, note, created_at')
+    .order('created_at', { ascending: false })
+    .limit(10)
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    taskId: String(row.task_id),
+    eventType: String(row.event_type),
+    note: String(row.note ?? ''),
+    createdAt: String(row.created_at),
+  }))
+}
