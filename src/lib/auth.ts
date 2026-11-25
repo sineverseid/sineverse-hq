@@ -186,6 +186,7 @@ export async function checkCommandCenterBackend(): Promise<BackendStatus> {
 export interface InstructionResult {
   ok: boolean
   message: string
+  reply?: string | null
 }
 
 /**
@@ -193,31 +194,81 @@ export interface InstructionResult {
  * Mengembalikan pesan jujur dari backend (atau error-nya), tanpa mengarang.
  */
 /**
- * Riwayat instruksi Founder: tugas-tugas terbaru dari tabel tasks,
- * urutan terbaru dulu. Dipakai Command Center supaya percakapan
- * tidak hilang saat pindah halaman.
+ * Satu baris percakapan Command Center: instruksi Founder (tugas di tabel
+ * tasks) atau balasan NARA (baris agent_reply di tabel task_logs).
+ * Dipakai Command Center supaya percakapan tidak hilang saat pindah halaman.
  */
-export interface InstructionHistoryItem {
+export interface ConversationEntry {
   id: string
-  instruction: string
-  status: string
+  kind: 'instruction' | 'reply'
+  text: string
+  sub: string
   createdAt: string
+  ok?: boolean
 }
 
-export async function listInstructions(): Promise<InstructionHistoryItem[]> {
+export async function listInstructions(): Promise<ConversationEntry[]> {
   if (!supabase) return []
-  const { data, error } = await supabase
+  const { data: tasks, error: tasksError } = await supabase
     .from('tasks')
     .select('id, title, status, created_at')
     .order('created_at', { ascending: false })
     .limit(20)
-  if (error || !data) return []
-  return data.map((row) => ({
-    id: String(row.id),
-    instruction: String(row.title),
-    status: String(row.status),
+  if (tasksError || !tasks || tasks.length === 0) return []
+  const taskIds = tasks.map((row) => String(row.id))
+  const { data: replies } = await supabase
+    .from('task_logs')
+    .select('id, task_id, note, created_at')
+    .eq('event_type', 'agent_reply')
+    .in('task_id', taskIds)
+    .order('created_at', { ascending: true })
+  const entries: ConversationEntry[] = tasks.map((row) => ({
+    id: `task-${String(row.id)}`,
+    kind: 'instruction' as const,
+    text: String(row.title),
+    sub: `Rencana dibuat (${String(row.status)}).`,
     createdAt: String(row.created_at),
+    ok: true,
   }))
+  for (const row of replies ?? []) {
+    entries.push({
+      id: `reply-${String(row.id)}`,
+      kind: 'reply' as const,
+      text: String(row.note ?? ''),
+      sub: 'Balasan NARA',
+      createdAt: String(row.created_at),
+      ok: true,
+    })
+  }
+  // Urutan kronologis supaya instruksi lalu balasannya terbaca berurutan.
+  entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  return entries
+}
+
+/**
+ * Langganan Realtime untuk percakapan: setiap tugas atau log baru
+ * (instruksi dari tab lain, balasan NARA) memanggil onChange supaya
+ * halaman memuat ulang riwayat tanpa refresh.
+ */
+export function subscribeConversation(onChange: () => void): () => void {
+  const client = supabase
+  if (!client) return () => {}
+  const channel = client
+    .channel('command-center-replies')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'tasks' },
+      () => onChange(),
+    )
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'task_logs' },
+      () => onChange(),
+    )
+    .subscribe()
+  return () => {
+    void client.removeChannel(channel)
+  }
 }
 
 export async function sendInstruction(
@@ -248,7 +299,7 @@ export async function sendInstruction(
   } catch {
     return { ok: false, message: 'Backend tidak dapat dihubungi.' }
   }
-  let body: { plan?: { title: string; status: string }; message?: string; error?: string } = {}
+  let body: { plan?: { title: string; status: string }; message?: string; reply?: string | null; error?: string } = {}
   try {
     body = (await res.json()) as typeof body
   } catch {
@@ -266,5 +317,6 @@ export async function sendInstruction(
   return {
     ok: true,
     message: `${plan} ${body.message ?? ''}`.trim(),
+    reply: body.reply ?? null,
   }
 }
