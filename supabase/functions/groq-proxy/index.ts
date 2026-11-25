@@ -1,5 +1,5 @@
 // groq-proxy — SINEVERSE AI Headquarters Edge Function.
-// STUB — NOT DEPLOYED. No HQ Supabase project exists yet.
+// DEPLOYED v2 (26 Nov 2026).
 // Required env vars (Deno.env only): SUPABASE_URL, SUPABASE_ANON_KEY,
 // SUPABASE_SERVICE_ROLE_KEY, GROQ_API_KEY. Optional: GROQ_DAILY_REQUEST_LIMIT
 // (default 900 requests/day, free-tier guard).
@@ -135,6 +135,9 @@ serve(async (req: Request) => {
   }
 
   // Usage row WITHOUT storing the prompt or response text.
+  // NOTE: ai_usage_logs has NO actor column (its user-ish columns are
+  // agent_id / task_id, both references) — an `actor` key made every
+  // usage insert fail silently, so usage was never recorded.
   const usage = (providerJson.usage ?? {}) as Record<string, unknown>;
   const promptTokens = typeof usage.prompt_tokens === "number"
     ? usage.prompt_tokens
@@ -149,7 +152,6 @@ serve(async (req: Request) => {
     prompt_tokens: promptTokens,
     completion_tokens: completionTokens,
     cost: 0, // Groq free tier.
-    actor: user.id,
   });
   if (usageError) {
     console.error("groq-proxy: ai_usage_logs insert failed");
