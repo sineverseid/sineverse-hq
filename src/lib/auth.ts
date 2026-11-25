@@ -502,6 +502,7 @@ export interface LiveAgent {
   name: string
   division: string
   role: string
+  jobDescription: string
   status: string
   model: string
   departmentId: string | null
@@ -511,7 +512,7 @@ export async function listAgents(): Promise<LiveAgent[]> {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('ai_agents')
-    .select('id, name, division, role, status, model, department_id')
+    .select('id, name, division, role, job_description, status, model, department_id')
     .order('created_at')
   if (error || !data) return []
   return data.map((row) => ({
@@ -519,6 +520,7 @@ export async function listAgents(): Promise<LiveAgent[]> {
     name: String(row.name),
     division: String(row.division),
     role: String(row.role),
+    jobDescription: String(row.job_description ?? ''),
     status: String(row.status),
     model: String(row.model),
     departmentId: row.department_id ? String(row.department_id) : null,
@@ -529,6 +531,7 @@ export interface LiveDepartment {
   id: string
   name: string
   slug: string
+  description: string
   leadAgentId: string | null
   sortOrder: number
 }
@@ -537,13 +540,14 @@ export async function listDepartments(): Promise<LiveDepartment[]> {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('departments')
-    .select('id, name, slug, lead_agent_id, sort_order')
+    .select('id, name, slug, description, lead_agent_id, sort_order')
     .order('sort_order')
   if (error || !data) return []
   return data.map((row) => ({
     id: String(row.id),
     name: String(row.name),
     slug: String(row.slug),
+    description: String(row.description ?? ''),
     leadAgentId: row.lead_agent_id ? String(row.lead_agent_id) : null,
     sortOrder: Number(row.sort_order ?? 0),
   }))
