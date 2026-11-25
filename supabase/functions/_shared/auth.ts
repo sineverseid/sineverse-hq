@@ -3,22 +3,45 @@
 //
 // Required env vars (read only from Deno.env at call time):
 //   SUPABASE_URL, SUPABASE_ANON_KEY
-// What remains: replace FOUNDER_UID below with the real founder auth user id
-// at deploy time, and enforce an aal2 (MFA) check on sensitive routes once
+// What remains: enforce an aal2 (MFA) check on sensitive routes once
 // Auth MFA (TOTP) is configured for the founder account.
+// FOUNDER_UID is set to the real founder account (sineverse.id@gmail.com),
+// created 26 Nov 2026.
 
 import { createClient, type SupabaseClient, type User } from "https://esm.sh/@supabase/supabase-js@2";
 
-// TODO: Replace at deploy time with the real founder auth user id
+// FOUNDER_UID — the real founder auth user id
 // (auth.users.id for the founder account in the SEPARATE HQ Supabase project).
-// This placeholder must never be treated as a real identity — while it is
-// the all-zero UUID, founder-only routes must refuse everyone (see below).
-export const FOUNDER_UID = "00000000-0000-0000-0000-000000000000";
+// Set 26 Nov 2026 to the founder account (sineverse.id@gmail.com).
+// Founder-only routes refuse everyone whose id differs from this value.
+export const FOUNDER_UID = "2161fd87-29ab-442e-8223-6d448c1aa7e5";
 
 /** True only once FOUNDER_UID has been replaced with a real, non-zero UUID. */
 export function isFounderUidConfigured(): boolean {
   return FOUNDER_UID !== "00000000-0000-0000-0000-000000000000" &&
     FOUNDER_UID.length > 0;
+}
+
+/**
+ * Read the assurance level (aal) from the caller's Bearer JWT payload.
+ * The token has already been validated by getUserFromRequest (auth.getUser),
+ * so decoding the payload here is sound — this only reads the aal claim.
+ * Returns 'aal1' | 'aal2' | null when the token or claim is absent.
+ */
+export function getAalFromRequest(req: Request): string | null {
+  const header = req.headers.get("Authorization");
+  if (!header || !header.toLowerCase().startsWith("bearer ")) return null;
+  const token = header.slice(7).trim();
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    ) as Record<string, unknown>;
+    return typeof payload.aal === "string" ? payload.aal : null;
+  } catch {
+    return null;
+  }
 }
 
 function getBearerToken(req: Request): string | null {
