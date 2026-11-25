@@ -1,7 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PageHeader from '../components/PageHeader.tsx'
-import { signIn, signOut, useSession } from '../lib/auth.ts'
+import {
+  getAssuranceLevel,
+  signIn,
+  signOut,
+  useSession,
+  verifyLoginTotp,
+} from '../lib/auth.ts'
 import { isSupabaseConfigured } from '../lib/supabase.ts'
 
 export default function Login() {
@@ -11,6 +17,21 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [mfaRequired, setMfaRequired] = useState(false)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaError, setMfaError] = useState<string | null>(null)
+  const [mfaBusy, setMfaBusy] = useState(false)
+
+  // Sesi yang sudah ada tapi baru aal1 (kata sandi saja) padahal MFA aktif:
+  // minta kode TOTP sebelum masuk.
+  useEffect(() => {
+    if (!session) return
+    getAssuranceLevel().then((level) => {
+      if (level && level.next === 'aal2' && level.current !== 'aal2') {
+        setMfaRequired(true)
+      }
+    })
+  }, [session])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -22,11 +43,31 @@ export default function Login() {
       setError(result.error)
       return
     }
+    const level = await getAssuranceLevel()
+    if (level && level.next === 'aal2' && level.current !== 'aal2') {
+      setMfaRequired(true)
+      return
+    }
+    navigate('/')
+  }
+
+  async function handleMfaSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setMfaError(null)
+    setMfaBusy(true)
+    const result = await verifyLoginTotp(mfaCode.trim())
+    setMfaBusy(false)
+    if (result.error) {
+      setMfaError(result.error)
+      return
+    }
     navigate('/')
   }
 
   async function handleSignOut() {
     await signOut()
+    setMfaRequired(false)
+    setMfaCode('')
   }
 
   return (
@@ -46,6 +87,50 @@ export default function Login() {
       {session === undefined ? (
         <section className="card" aria-label="Status login">
           <p>Memeriksa sesi…</p>
+        </section>
+      ) : session && mfaRequired ? (
+        <section className="card" aria-label="Verifikasi MFA">
+          <h2>Kode MFA</h2>
+          <p>
+            Kata sandi benar. Masukkan kode 6 digit dari aplikasi authenticator
+            untuk menyelesaikan login.
+          </p>
+          <form onSubmit={handleMfaSubmit}>
+            <div className="form-row">
+              <label className="form-label" htmlFor="login-mfa-code">
+                Kode 6 digit dari aplikasi authenticator
+              </label>
+              <input
+                id="login-mfa-code"
+                className="form-input"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+                required
+              />
+            </div>
+            {mfaError ? (
+              <p className="form-error" role="alert">
+                {mfaError}
+              </p>
+            ) : null}
+            <button className="button" type="submit" disabled={mfaBusy}>
+              {mfaBusy ? 'Memverifikasi…' : 'Verifikasi dan masuk'}
+            </button>
+          </form>
+          <p>
+            <button
+              className="button"
+              type="button"
+              onClick={() => {
+                void handleSignOut()
+              }}
+            >
+              Batal dan keluar
+            </button>
+          </p>
         </section>
       ) : session ? (
         <section className="card" aria-label="Sudah login">
