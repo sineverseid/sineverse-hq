@@ -1,7 +1,15 @@
+import { useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader.tsx'
+import { getMfaStatus, type MfaStatus } from '../lib/auth.ts'
 import { SEED_ACTIVITY } from '../lib/seed.ts'
 
 export default function SecurityAudit() {
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus>('loading')
+
+  useEffect(() => {
+    getMfaStatus().then(setMfaStatus)
+  }, [])
+
   return (
     <div>
       <PageHeader
@@ -17,9 +25,15 @@ export default function SecurityAudit() {
         </p>
         <p>
           Status MFA:{' '}
-          <span className="status-badge status-badge-warn">
-            Belum dikonfirmasi
-          </span>
+          {mfaStatus === 'active' ? (
+            <span className="status-badge status-badge-ok">Aktif</span>
+          ) : mfaStatus === 'loading' ? (
+            <span className="status-badge">Memeriksa…</span>
+          ) : (
+            <span className="status-badge status-badge-warn">
+              Belum dikonfirmasi
+            </span>
+          )}
         </p>
       </section>
 

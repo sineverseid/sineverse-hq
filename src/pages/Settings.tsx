@@ -1,7 +1,53 @@
-import { isSupabaseConfigured } from '../lib/supabase.ts'
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import MfaEnroll from '../components/MfaEnroll.tsx'
 import PageHeader from '../components/PageHeader.tsx'
+import {
+  getMfaStatus,
+  signOut,
+  useSession,
+  type MfaStatus,
+} from '../lib/auth.ts'
+import { isSupabaseConfigured } from '../lib/supabase.ts'
+
+function mfaBadge(status: MfaStatus) {
+  switch (status) {
+    case 'active':
+      return (
+        <span className="status-badge status-badge-ok">Aktif</span>
+      )
+    case 'inactive':
+      return (
+        <span className="status-badge status-badge-warn">
+          Belum dikonfirmasi
+        </span>
+      )
+    case 'no-session':
+      return (
+        <span className="status-badge status-badge-warn">
+          Belum dikonfirmasi
+        </span>
+      )
+    case 'not-configured':
+      return <span className="status-badge">Tidak dapat diperiksa</span>
+    default:
+      return <span className="status-badge">Memeriksa…</span>
+  }
+}
 
 export default function Settings() {
+  const session = useSession()
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus>('loading')
+
+  const refreshMfa = useCallback(() => {
+    setMfaStatus('loading')
+    getMfaStatus().then(setMfaStatus)
+  }, [])
+
+  useEffect(() => {
+    refreshMfa()
+  }, [refreshMfa, session])
+
   return (
     <div>
       <PageHeader
@@ -45,8 +91,33 @@ export default function Settings() {
         </p>
         <p>
           Status login:{' '}
-          <span className="status-badge">Belum login</span>
+          {session === undefined ? (
+            <span className="status-badge">Memeriksa…</span>
+          ) : session ? (
+            <span className="status-badge status-badge-ok">
+              Login sebagai {session.user.email}
+            </span>
+          ) : (
+            <span className="status-badge">Belum login</span>
+          )}
         </p>
+        {session ? (
+          <p>
+            <button
+              className="button"
+              type="button"
+              onClick={() => {
+                void signOut()
+              }}
+            >
+              Keluar
+            </button>
+          </p>
+        ) : (
+          <p>
+            <Link to="/login">Masuk sebagai Founder</Link>
+          </p>
+        )}
       </section>
 
       <section className="card" aria-label="MFA TOTP">
@@ -55,12 +126,8 @@ export default function Settings() {
           MFA TOTP wajib diaktifkan pada akun Founder. Enroll TOTP dilakukan
           dari akun Supabase Auth Founder sebelum HQ dipakai operasional.
         </p>
-        <p>
-          Status MFA:{' '}
-          <span className="status-badge status-badge-warn">
-            Belum dikonfirmasi
-          </span>
-        </p>
+        <p>Status MFA: {mfaBadge(mfaStatus)}</p>
+        <MfaEnroll status={mfaStatus} onVerified={refreshMfa} />
       </section>
     </div>
   )
