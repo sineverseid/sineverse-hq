@@ -1,5 +1,6 @@
 // drive-sync — SINEVERSE AI Headquarters Edge Function.
-// STUB — NOT DEPLOYED. No HQ Supabase project exists yet.
+// DEPLOYED v1 (26 Nov 2026). Returns 501 by design — Google Drive
+// credentials are NOT configured (see below).
 // Required env vars (Deno.env only): SUPABASE_URL, SUPABASE_ANON_KEY,
 // SUPABASE_SERVICE_ROLE_KEY. (Google Drive credentials are NOT configured —
 // see below.)
