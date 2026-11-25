@@ -22,7 +22,7 @@ export default function Workflow() {
               <span className="list-row-main">
                 <strong>{status.label}</strong>
               </span>
-              <span className="status-badge">— tugas</span>
+              <span className="status-badge">0 tugas</span>
             </li>
           ))}
         </ul>

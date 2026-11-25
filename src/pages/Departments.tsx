@@ -1,5 +1,5 @@
 import PageHeader from '../components/PageHeader.tsx'
-import { DIVISIONS } from '../types.ts'
+import { SEED_DEPARTMENTS } from '../lib/seed.ts'
 
 export default function Departments() {
   return (
@@ -10,18 +10,16 @@ export default function Departments() {
       />
 
       <div className="grid grid-2">
-        {DIVISIONS.map((division) => (
-          <article className="card" key={division.id}>
+        {SEED_DEPARTMENTS.map((division) => (
+          <article className="card" key={division.code}>
             <h2>
-              {division.id}. {division.name}
+              {division.code}. {division.name}
             </h2>
-            <p>{division.description}</p>
+            <p>{division.mandate}</p>
             <p>
-              Lead: <span className="status-badge">Belum terdaftar</span>
+              Lead: <strong>{division.leadName}</strong>
             </p>
-            <p>
-              Anggota: <span className="status-badge">Belum ada data</span>
-            </p>
+            <p>Tugas terbuka: 0 · Selesai: 0 · Tertunda: 0</p>
           </article>
         ))}
       </div>

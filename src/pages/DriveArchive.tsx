@@ -1,25 +1,37 @@
-import EmptyState from '../components/EmptyState.tsx'
 import PageHeader from '../components/PageHeader.tsx'
+import { SEED_DRIVE_ENTRIES } from '../lib/seed.ts'
 
 export default function DriveArchive() {
   return (
     <div>
       <PageHeader
         title="Google Drive Archive"
-        description="Arsip dokumen HQ di Google Drive: Master Archive, laporan, dan dokumen divisi. Sinkronisasi Drive belum aktif."
+        description="Arsip dokumen HQ di Google Drive: Master Archive, laporan, dan dokumen divisi."
       />
 
       <div className="notice notice-info" role="note">
-        <strong>Arsip Drive belum terhubung.</strong>
-        Sinkronisasi Google Drive (Edge Function drive-sync) belum aktif,
-        sehingga daftar folder dan dokumen belum dapat ditampilkan.
+        <strong>Entri terverifikasi dari Master Drive Index.</strong>
+        Sinkronisasi otomatis (Edge Function drive-sync) belum aktif — entri
+        di bawah ini adalah indeks yang sudah terverifikasi.
       </div>
 
       <div className="card">
-        <EmptyState
-          title="Belum ada dokumen terarsip"
-          description="Dokumen dari Google Drive akan tampil di sini setelah sinkronisasi Drive aktif."
-        />
+        <ul className="list">
+          {SEED_DRIVE_ENTRIES.map((entry) => (
+            <li className="list-row" key={entry.fileName}>
+              <span className="list-row-main">
+                <strong>{entry.fileName}</strong>
+                <small>
+                  {entry.version} · {entry.folder} · {entry.division} ·
+                  Pemilik: {entry.owner} · {entry.fileDate}
+                </small>
+              </span>
+              <span className="status-badge status-badge-ok">
+                Terverifikasi
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   )

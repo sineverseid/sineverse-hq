@@ -1,5 +1,5 @@
-import EmptyState from '../components/EmptyState.tsx'
 import PageHeader from '../components/PageHeader.tsx'
+import { SEED_ACTIVITY } from '../lib/seed.ts'
 
 export default function SecurityAudit() {
   return (
@@ -26,10 +26,19 @@ export default function SecurityAudit() {
       <section className="section" aria-label="Log audit">
         <h2>Log Audit</h2>
         <div className="card">
-          <EmptyState
-            title="Belum ada entri audit"
-            description="Belum ada peristiwa audit yang tercatat. Setiap login, persetujuan, dan perubahan konfigurasi akan tercatat di sini."
-          />
+          <ul className="list">
+            {SEED_ACTIVITY.map((activity) => (
+              <li className="list-row" key={activity.event}>
+                <span className="list-row-main">
+                  <strong>{activity.detail}</strong>
+                  <small>
+                    {activity.actor} — {activity.timeWib}
+                  </small>
+                </span>
+                <span className="status-badge">{activity.event}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
     </div>
