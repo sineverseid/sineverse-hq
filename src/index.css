@@ -465,6 +465,7 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 14px 4px;
   border-bottom: 1px solid var(--border);
@@ -579,6 +580,28 @@ h3 {
   background: var(--grey);
   color: var(--muted);
   cursor: not-allowed;
+}
+
+/* Tombol sekunder (mis. Tolak di Approval Center). */
+.button-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.button-ghost:disabled {
+  background: transparent;
+}
+
+/* Tombol aksi di baris daftar (mis. Setujui/Tolak persetujuan). */
+.list-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.list-row-actions .button {
+  padding: 8px 14px;
 }
 
 /* ---------- Forms (login, MFA) ---------- */

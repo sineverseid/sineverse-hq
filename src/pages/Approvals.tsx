@@ -3,8 +3,10 @@ import EmptyState from '../components/EmptyState.tsx'
 import PageHeader from '../components/PageHeader.tsx'
 import { APPROVAL_LEVELS } from '../types.ts'
 import {
+  decideApprovalRequest,
   listApprovalRequests,
   useSession,
+  type DecideApprovalAction,
   type LiveApprovalRequest,
 } from '../lib/auth.ts'
 
@@ -29,6 +31,20 @@ export default function Approvals() {
   const session = useSession()
   const [requests, setRequests] = useState<LiveApprovalRequest[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [decidingId, setDecidingId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  async function handleDecide(id: string, action: DecideApprovalAction) {
+    setDecidingId(id)
+    setNotice(null)
+    const result = await decideApprovalRequest(id, action)
+    setDecidingId(null)
+    setNotice(result.message)
+    if (result.ok) {
+      const live = await listApprovalRequests()
+      setRequests(live)
+    }
+  }
 
   useEffect(() => {
     if (!session) {
@@ -60,6 +76,11 @@ export default function Approvals() {
 
       <section className="section" aria-label="Antrean persetujuan">
         <h2>Antrean Persetujuan</h2>
+        {notice ? (
+          <p className="notice" role="status">
+            {notice}
+          </p>
+        ) : null}
         <div className="card">
           {loaded && requests.length > 0 ? (
             <ul className="list">
@@ -80,6 +101,26 @@ export default function Approvals() {
                   >
                     {req.status}
                   </span>
+                  {req.status === 'pending' ? (
+                    <span className="list-row-actions">
+                      <button
+                        type="button"
+                        className="button"
+                        disabled={decidingId === req.id}
+                        onClick={() => void handleDecide(req.id, 'approve')}
+                      >
+                        Setujui
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-ghost"
+                        disabled={decidingId === req.id}
+                        onClick={() => void handleDecide(req.id, 'reject')}
+                      >
+                        Tolak
+                      </button>
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>

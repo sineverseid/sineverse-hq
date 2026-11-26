@@ -497,6 +497,77 @@ export async function listApprovalRequests(): Promise<LiveApprovalRequest[]> {
   }))
 }
 
+export type DecideApprovalAction = 'approve' | 'reject'
+
+export interface DecideApprovalResult {
+  ok: boolean
+  message: string
+}
+
+/**
+ * Memutuskan permintaan persetujuan lewat approval-engine (Founder saja,
+ * sesi MFA/aal2). Dipakai halaman Approval Center — sebelumnya halaman itu
+ * hanya menampilkan antrean tanpa tombol keputusan.
+ */
+export async function decideApprovalRequest(
+  approvalRequestId: string,
+  action: DecideApprovalAction,
+): Promise<DecideApprovalResult> {
+  if (!supabase || !isSupabaseConfigured) {
+    return { ok: false, message: 'Supabase belum dikonfigurasi.' }
+  }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session) {
+    return {
+      ok: false,
+      message: 'Login sebagai Founder untuk memutuskan persetujuan.',
+    }
+  }
+  const url = import.meta.env.VITE_SUPABASE_URL as string
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  let res: Response
+  try {
+    res = await fetch(`${url}/functions/v1/approval-engine`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ approval_request_id: approvalRequestId, action }),
+    })
+  } catch {
+    return { ok: false, message: 'Backend tidak dapat dihubungi.' }
+  }
+  let body: {
+    error?: string
+    request?: { status?: string }
+    warning?: string
+  } = {}
+  try {
+    body = (await res.json()) as typeof body
+  } catch {
+    // Respons bukan JSON — pakai status HTTP saja.
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      message: body.error ?? `Backend menolak keputusan (HTTP ${res.status}).`,
+    }
+  }
+  const status =
+    body.request?.status ?? (action === 'approve' ? 'approved' : 'rejected')
+  const warning = body.warning ? ` (Peringatan: ${body.warning}.)` : ''
+  return {
+    ok: true,
+    message: `Permintaan ${
+      status === 'approved' ? 'disetujui' : 'ditolak'
+    }.${warning}`,
+  }
+}
+
 export interface LiveAgent {
   id: string
   name: string
