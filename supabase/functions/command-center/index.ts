@@ -42,6 +42,14 @@
 // then ask ONE clarifying question. Anti-hallucination guard stays:
 // never invent courses, numbers, or incidents; general knowledge outside
 // HQ data must be labelled "di luar data HQ".
+// Execution v9.1 (26 Nov 2026): answer-first rule + 7-day Groq series.
+// v9 verification found two gaps: (1) an academy question was answered
+// ABOUT the division's task instead of the academy, even though the
+// academy data was in PENGETAHUAN HQ + the live catalog — so the prompt
+// now requires answering the QUESTION FIRST from the nearest data, with
+// task status only when asked or as one trailing sentence; (2) a "this
+// week" Groq question could only be answered with today + all-time, so
+// DATA HQ now carries a per-day 7-day series (WIB) from ai_usage_logs.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { corsHeaders, handleOptions, jsonResponse } from "../_shared/cors.ts";
@@ -74,6 +82,14 @@ const NARA_SYSTEM_PROMPT =
   "generik tentang AI. Bila memakai pengetahuan umum di luar data HQ, beri label jelas " +
   "'di luar data HQ'. Pertanyaan tentang jumlah atau angka HQ (agen, tugas, laporan, " +
   "pemakaian AI, persetujuan) jawab HANYA dari blok DATA HQ. " +
+  "JAWAB PERTANYAAN DULU: bila pesan adalah PERTANYAAN (meminta informasi), jawab " +
+  "pertanyaannya DULU dari data terdekat yang ada — PENGETAHUAN HQ, DATA KATALOG PLATFORM, " +
+  "DATA HQ, DATA DIVISI — sebelum membahas tugas atau langkah berikutnya. Status tugas " +
+  "divisi HANYA disebut bila pengguna bertanya tentang tugas, atau sebagai SATU kalimat " +
+  "tambahan sesudah jawaban; jangan jadikan status tugas sebagai isi jawaban. Untuk " +
+  "pertanyaan tentang akademi atau riset akademi, jawaban WAJIB memuat struktur akademi " +
+  "dari katalog dan PENGETAHUAN HQ (10 course, 30 modul, 110 lesson, RPS Semester 1, " +
+  "katalog A3: 330 soal + 110 tugas) bila relevan, sebelum menawarkan langkah berikutnya. " +
   "FORMAT JAWABAN: teks polos saja, supaya enak dibaca di HP. Dilarang memakai simbol Markdown " +
   "(tanpa **, tanpa ###, tanpa ---, tanpa tabel |). Pisahkan bagian dengan baris kosong. " +
   "Pakai poin bernomor pendek. Jawab ringkas.";
@@ -192,6 +208,37 @@ function startOfTodayWibIso(): string {
   return new Date(wib.getTime() - 7 * 60 * 60 * 1000).toISOString();
 }
 
+/** Kunci tanggal WIB (YYYY-MM-DD) dari sebuah ISO timestamp. */
+function wibDateKey(iso: string): string | null {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  } catch {
+    return null;
+  }
+}
+
+/** Kunci tanggal WIB untuk n hari yang lalu (0 = hari ini). */
+function wibDateDaysAgo(n: number): string {
+  const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  now.setUTCDate(now.getUTCDate() - n);
+  return now.toISOString().slice(0, 10);
+}
+
+/** "26 Nov" untuk sebuah kunci tanggal WIB. */
+function formatWibDay(key: string): string {
+  try {
+    return new Date(`${key}T00:00:00+07:00`).toLocaleDateString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      day: "numeric",
+      month: "short",
+    });
+  } catch {
+    return key;
+  }
+}
+
 /** "26 Nov, 17:00" (WIB) untuk judul laporan; kembali ke ISO bila gagal. */
 function formatWibShort(iso: string): string {
   try {
@@ -268,11 +315,37 @@ async function fetchHqSummary(
       }
     }
 
+    // Deret harian 7 hari terakhir (WIB) untuk pertanyaan "minggu ini".
+    const dayMap = new Map<string, { requests: number; tokens: number }>();
+    for (const row of usage) {
+      const key = wibDateKey(String(row.created_at ?? ""));
+      if (!key) continue;
+      const entry = dayMap.get(key) ?? { requests: 0, tokens: 0 };
+      entry.requests += 1;
+      entry.tokens += Number(row.prompt_tokens ?? 0) +
+        Number(row.completion_tokens ?? 0);
+      dayMap.set(key, entry);
+    }
+    const last7: string[] = [];
+    let weekRequests = 0;
+    let weekTokens = 0;
+    for (let i = 6; i >= 0; i--) {
+      const key = wibDateDaysAgo(i);
+      const e = dayMap.get(key);
+      const r = e?.requests ?? 0;
+      const t = e?.tokens ?? 0;
+      weekRequests += r;
+      weekTokens += t;
+      last7.push(`${formatWibDay(key)}: ${r} request, ${t} token`);
+    }
+
     const lines: string[] = [
       `Agen AI: ${agents.length} total, ${activeAgents.length} aktif (${activeAgents.map((a) => String(a.name)).join(", ") || "tidak ada"}).`,
       `Tugas: ${countTasks("completed")} selesai, ${countTasks("backlog")} backlog, ${countTasks("in_review")} in review, ${countTasks("in_progress")} berjalan, ${countTasks("awaiting_approval")} menunggu persetujuan, ${countTasks("blocked")} diblokir, ${countTasks("cancelled")} dibatalkan.`,
       `Persetujuan menunggu: ${pendingApprovals}.`,
       `Pemakaian Groq: hari ini ${todayRequests} request, ${todayTokens} token; total sejak awal ${usage.length} request, ${totalTokens} token.`,
+      `Pemakaian Groq 7 hari terakhir (per hari WIB): ${last7.join(" | ")}.`,
+      `Total 7 hari terakhir: ${weekRequests} request, ${weekTokens} token.`,
     ];
     if (reports.length > 0) {
       lines.push("Laporan terbaru:");
@@ -702,7 +775,10 @@ serve(async (req: Request) => {
       "Awali jawaban dengan nama dan divisimu. " +
       "Ikuti KEBIJAKAN MENJAWAB di atas: bila datum persisnya tidak ada, beri data terdekat " +
       "yang nyata, sebutkan apa yang tidak ada, dan tawarkan satu langkah berikutnya — jangan " +
-      "pernah membalas hanya dengan 'belum tersedia'.";
+      "pernah membalas hanya dengan 'belum tersedia'. " +
+      "DATA DIVISI di bawah berisi status tugas divisi — itu BUKAN isi jawaban kecuali " +
+      "pengguna bertanya tentang tugas. Jawab dulu pertanyaan pengguna dari PENGETAHUAN HQ " +
+      "dan DATA KATALOG PLATFORM.";
     if (divisionSummary) {
       systemPrompt +=
         `\n\nDATA DIVISI ${routing.division.name} (live, dibaca saat menjawab):\n` +
