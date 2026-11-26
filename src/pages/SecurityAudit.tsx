@@ -3,6 +3,7 @@ import PageHeader from '../components/PageHeader.tsx'
 import {
   getMfaStatus,
   listAuditLogs,
+  safe,
   useSession,
   type LiveAuditLog,
   type MfaStatus,
@@ -25,7 +26,7 @@ export default function SecurityAudit() {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    getMfaStatus().then(setMfaStatus)
+    safe(getMfaStatus(), 'loading').then(setMfaStatus)
   }, [])
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export default function SecurityAudit() {
       setLoaded(false)
       return
     }
-    listAuditLogs().then((live) => {
+    safe(listAuditLogs(), []).then((live) => {
       setAudit(live)
       setLoaded(true)
     })

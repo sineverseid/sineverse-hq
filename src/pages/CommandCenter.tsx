@@ -4,6 +4,7 @@ import PageHeader from '../components/PageHeader.tsx'
 import {
   checkCommandCenterBackend,
   listInstructions,
+  safe,
   sendInstruction,
   subscribeConversation,
   useSession,
@@ -53,7 +54,7 @@ export default function CommandCenter() {
   const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
-    checkCommandCenterBackend().then(setBackend)
+    safe(checkCommandCenterBackend(), 'not-deployed').then(setBackend)
   }, [])
 
   // Riwayat diambil dari database supaya tidak hilang saat pindah halaman,
@@ -66,7 +67,7 @@ export default function CommandCenter() {
     let mounted = true
     setHistoryLoading(true)
     const load = () =>
-      listInstructions().then((rows) => {
+      safe(listInstructions(), []).then((rows) => {
         if (mounted) setSent(rows)
       })
     load().finally(() => {
@@ -109,7 +110,7 @@ export default function CommandCenter() {
     }
     // Muat ulang dari database supaya entri baru muncul sekali saja,
     // beserta balasan NARA bila ada.
-    setSent(await listInstructions())
+    setSent(await safe(listInstructions(), sent))
   }
 
   return (

@@ -5,6 +5,7 @@ import { TASK_STATUSES, type TaskStatus } from '../types.ts'
 import {
   listDepartments,
   listTasks,
+  safe,
   useSession,
   type LiveDepartment,
   type LiveTask,
@@ -42,7 +43,7 @@ export default function Tasks() {
       setLoaded(false)
       return
     }
-    Promise.all([listTasks(), listDepartments()]).then(
+    Promise.all([safe(listTasks(), []), safe(listDepartments(), [])]).then(
       ([liveTasks, liveDepartments]) => {
         setTasks(liveTasks)
         setDepartments(liveDepartments)
@@ -59,7 +60,9 @@ export default function Tasks() {
 
   const emptyDescription = !session
     ? 'Login sebagai Founder untuk melihat tugas HQ.'
-    : selectedStatus === 'all'
+    : !loaded
+      ? 'Memuat tugas…'
+      : selectedStatus === 'all'
       ? 'Belum ada tugas yang tercatat di HQ.'
       : 'Belum ada tugas dengan status ini.'
 

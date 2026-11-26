@@ -5,6 +5,7 @@ import { APPROVAL_LEVELS } from '../types.ts'
 import {
   decideApprovalRequest,
   listApprovalRequests,
+  safe,
   useSession,
   type DecideApprovalAction,
   type LiveApprovalRequest,
@@ -52,7 +53,7 @@ export default function Approvals() {
       setLoaded(false)
       return
     }
-    listApprovalRequests().then((live) => {
+    safe(listApprovalRequests(), []).then((live) => {
       setRequests(live)
       setLoaded(true)
     })

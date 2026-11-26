@@ -8,6 +8,7 @@ import {
   listScheduledJobs,
   listTaskLogs,
   listTasks,
+  safe,
   useSession,
   type LiveAgent,
   type LiveApprovalRequest,
@@ -55,12 +56,12 @@ export default function Dashboard() {
       return
     }
     Promise.all([
-      listTasks(),
-      listAgents(),
-      listApprovalRequests(),
-      listDepartments(),
-      listTaskLogs(),
-      listScheduledJobs(),
+      safe(listTasks(), []),
+      safe(listAgents(), []),
+      safe(listApprovalRequests(), []),
+      safe(listDepartments(), []),
+      safe(listTaskLogs(), []),
+      safe(listScheduledJobs(), []),
     ]).then(([liveTasks, liveAgents, liveApprovals, liveDepartments, liveLogs, liveJobs]) => {
       setTasks(liveTasks)
       setAgents(liveAgents)
@@ -88,7 +89,9 @@ export default function Dashboard() {
       note:
         agents.length > 0
           ? `${activeAgents.length} aktif — ${activeAgents.map((a) => a.name).join(', ') || '—'}.`
-          : 'Belum ada agen terdaftar.',
+          : loaded
+            ? 'Belum ada agen terdaftar.'
+            : 'Memuat…',
     },
     {
       label: 'Tugas Aktif',
@@ -96,7 +99,9 @@ export default function Dashboard() {
       note:
         activeTasks.length > 0
           ? `${tasks.filter((t) => t.status === 'backlog').length} di backlog.`
-          : 'Belum ada tugas tercatat.',
+          : loaded
+            ? 'Belum ada tugas tercatat.'
+            : 'Memuat…',
     },
     {
       label: 'Tugas Selesai',
@@ -104,7 +109,9 @@ export default function Dashboard() {
       note:
         completedToday.length > 0
           ? 'Diselesaikan hari ini.'
-          : 'Belum ada tugas selesai hari ini.',
+          : loaded
+            ? 'Belum ada tugas selesai hari ini.'
+            : 'Memuat…',
     },
     {
       label: 'Menunggu Persetujuan',
@@ -112,7 +119,9 @@ export default function Dashboard() {
       note:
         pendingApprovals.length > 0
           ? 'Menunggu keputusan Founder.'
-          : 'Belum ada antrean persetujuan.',
+          : loaded
+            ? 'Belum ada antrean persetujuan.'
+            : 'Memuat…',
     },
   ]
 
@@ -183,7 +192,9 @@ export default function Dashboard() {
             ) : (
               <p>
                 {session
-                  ? 'Belum ada job terjadwal.'
+                  ? loaded
+                    ? 'Belum ada job terjadwal.'
+                    : 'Memuat jadwal…'
                   : 'Login untuk melihat jadwal.'}
               </p>
             )}
@@ -223,7 +234,9 @@ export default function Dashboard() {
           ) : (
             <p>
               {session
-                ? 'Belum ada divisi tercatat.'
+                ? loaded
+                  ? 'Belum ada divisi tercatat.'
+                  : 'Memuat divisi…'
                 : 'Login untuk melihat kinerja divisi.'}
             </p>
           )}
@@ -252,7 +265,9 @@ export default function Dashboard() {
           ) : (
             <p>
               {session
-                ? 'Belum ada aktivitas tercatat.'
+                ? loaded
+                  ? 'Belum ada aktivitas tercatat.'
+                  : 'Memuat aktivitas…'
                 : 'Login untuk melihat aktivitas.'}
             </p>
           )}

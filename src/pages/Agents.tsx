@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader.tsx'
 import {
   listAgents,
+  safe,
   useSession,
   type LiveAgent,
 } from '../lib/auth.ts'
@@ -28,7 +29,7 @@ export default function Agents() {
       setLoaded(false)
       return
     }
-    listAgents().then((liveAgents) => {
+    safe(listAgents(), []).then((liveAgents) => {
       setAgents(liveAgents)
       setLoaded(true)
     })

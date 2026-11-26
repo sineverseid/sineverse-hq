@@ -4,6 +4,7 @@ import { DAILY_SCHEDULE, PERIODIC_SCHEDULE } from '../types.ts'
 import {
   listJobExecutions,
   listScheduledJobs,
+  safe,
   useSession,
   type LiveJobExecution,
   type LiveScheduledJob,
@@ -49,7 +50,10 @@ export default function Schedule() {
       setLoaded(false)
       return
     }
-    Promise.all([listScheduledJobs(), listJobExecutions()]).then(
+    Promise.all([
+      safe(listScheduledJobs(), []),
+      safe(listJobExecutions(), []),
+    ]).then(
       ([liveJobs, liveExecutions]) => {
         setJobs(liveJobs)
         setExecutions(liveExecutions)
@@ -59,6 +63,7 @@ export default function Schedule() {
   }, [session])
 
   const live = loaded && jobs.length > 0
+  const loading = !!session && !loaded
   const ranJobs = jobs.filter((job) => job.lastRunAt !== null)
   const lastRun = executions[0]
 
@@ -69,7 +74,11 @@ export default function Schedule() {
         description="Jadwal kerja otomatis HQ: pemeriksaan sistem, briefing, laporan harian, mingguan, dan bulanan."
       />
 
-      {live ? (
+      {loading ? (
+        <div className="notice" role="status">
+          <strong>Memuat jadwal…</strong>
+        </div>
+      ) : live ? (
         <div className="notice notice-info" role="status">
           <strong>Scheduler backend aktif.</strong>
           {ranJobs.length > 0

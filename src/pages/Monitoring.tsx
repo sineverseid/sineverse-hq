@@ -8,6 +8,7 @@ import {
   listReports,
   listScheduledJobs,
   listTasks,
+  safe,
   useSession,
   type LiveAgent,
   type LiveAuditLog,
@@ -53,13 +54,13 @@ export default function Monitoring() {
       return
     }
     Promise.all([
-      listScheduledJobs(),
-      listJobExecutions(),
-      getGroqUsage(),
-      listAuditLogs(),
-      listTasks(),
-      listAgents(),
-      listReports(),
+      safe(listScheduledJobs(), []),
+      safe(listJobExecutions(), []),
+      safe(getGroqUsage(), { totalRequests: 0, totalTokens: 0 }),
+      safe(listAuditLogs(), []),
+      safe(listTasks(), []),
+      safe(listAgents(), []),
+      safe(listReports(), []),
     ]).then(
       ([
         liveJobs,
@@ -130,7 +131,11 @@ export default function Monitoring() {
           </>
         ) : (
           <p>
-            {session ? 'Belum ada job terjadwal.' : 'Login untuk melihat scheduler.'}
+            {session
+              ? loaded
+                ? 'Belum ada job terjadwal.'
+                : 'Memuat data scheduler…'
+              : 'Login untuk melihat scheduler.'}
           </p>
         )}
       </section>
@@ -172,7 +177,9 @@ export default function Monitoring() {
         ) : (
           <p>
             {session
-              ? 'Belum ada entri audit. Log terisi saat ada keputusan persetujuan atau panggilan platform.'
+              ? loaded
+                ? 'Belum ada entri audit. Log terisi saat ada keputusan persetujuan atau panggilan platform.'
+                : 'Memuat log audit…'
               : 'Login untuk melihat log audit.'}
           </p>
         )}

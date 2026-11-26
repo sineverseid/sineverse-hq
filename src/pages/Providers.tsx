@@ -3,6 +3,7 @@ import EmptyState from '../components/EmptyState.tsx'
 import PageHeader from '../components/PageHeader.tsx'
 import {
   getGroqUsage,
+  safe,
   useSession,
   type LiveGroqUsage,
 } from '../lib/auth.ts'
@@ -16,7 +17,7 @@ export default function Providers() {
 
   useEffect(() => {
     if (!session) return
-    getGroqUsage().then(setUsage)
+    safe(getGroqUsage(), { totalRequests: 0, totalTokens: 0 }).then(setUsage)
   }, [session])
 
   return (

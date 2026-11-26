@@ -4,6 +4,7 @@ import {
   listAgents,
   listDepartments,
   listTasks,
+  safe,
   useSession,
   type LiveAgent,
   type LiveDepartment,
@@ -25,7 +26,11 @@ export default function Departments() {
       setLoaded(false)
       return
     }
-    Promise.all([listDepartments(), listAgents(), listTasks()]).then(
+    Promise.all([
+      safe(listDepartments(), []),
+      safe(listAgents(), []),
+      safe(listTasks(), []),
+    ]).then(
       ([liveDepartments, liveAgents, liveTasks]) => {
         setDepartments(liveDepartments)
         setAgents(liveAgents)

@@ -2,6 +2,19 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from './supabase.ts'
 
+/** UID akun Founder — dipakai untuk label ramah di log audit. */
+export const FOUNDER_UID = '2161fd87-29ab-442e-8223-6d448c1aa7e5'
+
+/**
+ * Bungkus janji baca Supabase agar gagal jaringan tidak menggagalkan
+ * seluruh halaman: kueri yang melempar (misalnya koneksi putus di HP)
+ * kembali sebagai nilai gantinya, bukan rejection yang membatalkan
+ * Promise.all dan membuat halaman menampilkan angka nol palsu.
+ */
+export function safe<T>(p: Promise<T>, fallback: T): Promise<T> {
+  return p.catch(() => fallback)
+}
+
 /**
  * Sesi Supabase saat ini.
  * undefined = belum dicek; null = tidak ada sesi (belum login).
@@ -627,6 +640,7 @@ export async function listDepartments(): Promise<LiveDepartment[]> {
 export interface LiveTaskLog {
   id: string
   taskId: string
+  agentId: string | null
   eventType: string
   note: string
   createdAt: string
@@ -636,13 +650,14 @@ export async function listTaskLogs(): Promise<LiveTaskLog[]> {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('task_logs')
-    .select('id, task_id, event_type, note, created_at')
+    .select('id, task_id, agent_id, event_type, note, created_at')
     .order('created_at', { ascending: false })
-    .limit(10)
+    .limit(50)
   if (error || !data) return []
   return data.map((row) => ({
     id: String(row.id),
     taskId: String(row.task_id),
+    agentId: row.agent_id ? String(row.agent_id) : null,
     eventType: String(row.event_type),
     note: String(row.note ?? ''),
     createdAt: String(row.created_at),
@@ -667,9 +682,70 @@ export async function listAuditLogs(): Promise<LiveAuditLog[]> {
   if (error || !data) return []
   return data.map((row) => ({
     id: String(row.id),
-    actor: String(row.actor),
+    actor:
+      String(row.actor) === FOUNDER_UID ? 'Founder' : String(row.actor),
     action: String(row.action),
     entity: String(row.entity),
+    createdAt: String(row.created_at),
+  }))
+}
+
+export interface LiveDeliverable {
+  id: string
+  title: string
+  description: string
+  status: string
+  version: number
+  driveLink: string | null
+  driveFileId: string | null
+  createdAt: string
+}
+
+export async function listDeliverables(): Promise<LiveDeliverable[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('deliverables')
+    .select(
+      'id, title, description, status, version, drive_link, drive_file_id, created_at',
+    )
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    title: String(row.title),
+    description: String(row.description ?? ''),
+    status: String(row.status),
+    version: Number(row.version ?? 1),
+    driveLink: row.drive_link ? String(row.drive_link) : null,
+    driveFileId: row.drive_file_id ? String(row.drive_file_id) : null,
+    createdAt: String(row.created_at),
+  }))
+}
+
+export interface LiveKnowledgeDoc {
+  id: string
+  title: string
+  category: string
+  content: string
+  status: string
+  createdAt: string
+}
+
+export async function listKnowledgeBase(): Promise<LiveKnowledgeDoc[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('knowledge_base')
+    .select('id, title, category, content, status, created_at')
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error || !data) return []
+  return data.map((row) => ({
+    id: String(row.id),
+    title: String(row.title),
+    category: String(row.category),
+    content: String(row.content ?? ''),
+    status: String(row.status),
     createdAt: String(row.created_at),
   }))
 }
