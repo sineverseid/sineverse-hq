@@ -7,8 +7,7 @@
 // backlog task-plan, then asks NARA (Groq GPT-OSS 120B via the groq-proxy
 // function) for a reply and stores it as a task_logs agent_reply row.
 // The reply is a single NARA answer, not division-lead orchestration —
-// that remains unwired. If the Groq call fails, the plan is still created
-// and the response says so honestly (reply null + warning).
+// that was unwired until v8.
 // Execution v6 (26 Nov 2026): before the Groq call, fetches a COMPACT
 // summary of the live platform catalog (courses -> modules -> lessons,
 // with per-lesson assignment/quiz/resource counts) and appends it to the
@@ -23,6 +22,15 @@
 // REAL numbers instead of saying "Data belum tersedia di HQ". If the HQ
 // fetch fails, the reply falls back to the static prompt (warning
 // "hq_data_unavailable") — never blocks the plan or the reply.
+// Execution v8 (26 Nov 2026): division-lead routing. Before the reply,
+// the function fetches the live division + Lead roster, classifies the
+// instruction to ONE division (one small Groq call, keyword fallback),
+// fetches that division's live tasks, and — for Quality Assurance &
+// Security — the static security-incident history + the latest audit log.
+// The main reply is then written AS the division Lead, and the backlog
+// task carries the routing + a follow-up plan (description +
+// owner_agent_id). Code fixes and deploys are NOT done here — that stays
+// with Nara in chat.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { corsHeaders, handleOptions, jsonResponse } from "../_shared/cors.ts";
@@ -31,6 +39,7 @@ import { getServiceClient, getUserFromRequest } from "../_shared/auth.ts";
 const MAX_INSTRUCTION_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 120;
 const GROQ_TIMEOUT_MS = 50000;
+const CLASSIFY_TIMEOUT_MS = 20000;
 const CATALOG_TIMEOUT_MS = 10000;
 const NARA_SYSTEM_PROMPT =
   "Kamu NARA, Executive Director AI SINEVERSE AI Headquarters. " +
@@ -52,6 +61,16 @@ const NARA_SYSTEM_PROMPT =
   "FORMAT JAWABAN: teks polos saja, supaya enak dibaca di HP. Dilarang memakai simbol Markdown " +
   "(tanpa **, tanpa ###, tanpa ---, tanpa tabel |). Pisahkan bagian dengan baris kosong. " +
   "Pakai poin bernomor pendek. Jawab ringkas.";
+
+// Riwayat insiden keamanan platform SINEVERSE — fakta yang terverifikasi,
+// diperbarui manual bila ada insiden baru. Dipakai HANYA untuk divisi
+// Quality Assurance & Security.
+const SECURITY_HISTORY =
+  "RIWAYAT INSIDEN KEAMANAN PLATFORM SINEVERSE (terakhir diperiksa 26 Nov 2026):\n" +
+  "1. Kebocoran profil — data profil bisa dibaca pihak tak berhak sejak migrasi 001; diperbaiki 24 Nov 2026 (migrasi 056 + hardening RLS).\n" +
+  "2. Kebocoran aplikasi mentor — data aplikasi mentor bisa dibaca pihak tak berhak; diperbaiki 25 Nov 2026 (policy 029).\n" +
+  "Tidak ada kebocoran aktif yang diketahui per 26 Nov 2026.\n" +
+  "ATURAN: untuk pertanyaan tentang kebocoran data, jawab dari riwayat di atas dan log audit di bawah — jangan jawab 'belum tersedia'. Sebut tanggal terakhir diperiksa (26 Nov 2026).";
 
 function extractReply(providerJson: unknown): string | null {
   if (!providerJson || typeof providerJson !== "object") return null;
@@ -256,6 +275,239 @@ async function fetchHqSummary(
   }
 }
 
+// ---- v8: division-lead routing ----
+
+type DivisionLead = {
+  id: string;
+  name: string;
+  leadId: string;
+  leadName: string;
+  leadRole: string;
+  leadJob: string;
+};
+
+type Routing = {
+  division: DivisionLead;
+  reason: string;
+  via: "groq" | "keyword";
+};
+
+// Live roster: every department with its Lead agent. Returns null when the
+// roster cannot be read (caller then answers as NARA, unrouted).
+async function fetchRoster(
+  supabase: HqClient,
+): Promise<DivisionLead[] | null> {
+  try {
+    const [deptsRes, agentsRes] = await Promise.all([
+      supabase.from("departments").select("id, name"),
+      supabase.from("ai_agents").select(
+        "id, name, department_id, role, job_description",
+      ),
+    ]);
+    if (deptsRes.error || agentsRes.error) {
+      console.error("command-center: roster fetch failed");
+      return null;
+    }
+    const depts = Array.isArray(deptsRes.data) ? deptsRes.data : [];
+    const agents = Array.isArray(agentsRes.data) ? agentsRes.data : [];
+    const roster: DivisionLead[] = [];
+    for (const d of depts) {
+      const lead = agents.find(
+        (a) => String(a.department_id) === String(d.id),
+      );
+      if (!lead) continue;
+      roster.push({
+        id: String(d.id),
+        name: String(d.name),
+        leadId: String(lead.id),
+        leadName: String(lead.name),
+        leadRole: String(lead.role ?? ""),
+        leadJob: String(lead.job_description ?? ""),
+      });
+    }
+    return roster.length > 0 ? roster : null;
+  } catch {
+    console.error("command-center: roster fetch failed");
+    return null;
+  }
+}
+
+// Keyword fallback for routing, used only when the Groq classifier fails
+// or returns no division. Order matters: the first matching route wins.
+const KEYWORD_ROUTES: Array<{ keywords: string[]; division: string }> = [
+  { keywords: ["kebocoran", "keamanan", "rls", "audit"], division: "Quality Assurance & Security" },
+  { keywords: ["course", "lesson", "materi", "soal", "tugas"], division: "Academic & Curriculum" },
+  { keywords: ["mentor"], division: "Talent & Mentor Development" },
+  { keywords: ["event", "festival", "lomba"], division: "Film Festival & Event" },
+  { keywords: ["komunitas"], division: "Community & Partnership" },
+  { keywords: ["pemasaran", "konten"], division: "Marketing & Creative" },
+  { keywords: ["laporan", "analitik"], division: "Growth & Data Analytics" },
+  { keywords: ["operasional", "tata kelola"], division: "Operations & Governance" },
+  { keywords: ["produk", "fitur", "aplikasi", "web"], division: "Digital Product & Engineering" },
+  { keywords: ["ui", "desain"], division: "UI/UX & Product Research" },
+  { keywords: ["riset", "industri"], division: "Research & Industry Relations" },
+  { keywords: ["bantuan", "pengguna"], division: "Customer Success & Helpdesk" },
+  { keywords: ["ai"], division: "AI Innovation & Research" },
+];
+
+function hasKeyword(text: string, kw: string): boolean {
+  if (kw.length <= 3) {
+    return new RegExp(`\\b${kw}\\b`, "i").test(text);
+  }
+  return text.toLowerCase().includes(kw);
+}
+
+function classifyByKeywords(
+  instruction: string,
+  roster: DivisionLead[],
+): DivisionLead | null {
+  for (const route of KEYWORD_ROUTES) {
+    if (route.keywords.some((kw) => hasKeyword(instruction, kw))) {
+      const hit = roster.find(
+        (d) => d.name.toLowerCase() === route.division.toLowerCase(),
+      );
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+// One small Groq call that picks ONE division for the instruction.
+// Returns null on any failure or when no division clearly fits.
+async function classifyDivision(
+  instruction: string,
+  roster: DivisionLead[],
+  supabaseUrl: string,
+  anonKey: string,
+  authHeader: string,
+): Promise<{ division: DivisionLead; reason: string } | null> {
+  const rosterText = roster
+    .map((d) => `- ${d.name} — Lead ${d.leadName} — ${d.leadJob || d.leadRole}`)
+    .join("\n");
+  const system =
+    "Kamu pengarah tugas SINEVERSE AI Headquarters. " +
+    "Tentukan SATU divisi yang paling tepat untuk instruksi Founder dari daftar di bawah. " +
+    "Balas HANYA dengan satu objek JSON, tanpa teks lain: " +
+    '{"division_name": "<nama divisi persis dari daftar atau null>", "alasan_singkat": "<satu kalimat alasan>"}. ' +
+    "Bila tidak ada divisi yang jelas cocok (misalnya pertanyaan umum tentang HQ), isi division_name dengan null.\n\n" +
+    "DAFTAR DIVISI:\n" + rosterText;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), CLASSIFY_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(`${supabaseUrl}/functions/v1/groq-proxy`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: anonKey,
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: instruction },
+          ],
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!res.ok) {
+      console.error(
+        `command-center: classify groq-proxy HTTP ${res.status}`,
+      );
+      return null;
+    }
+    const providerJson: unknown = await res.json();
+    const content = extractReply(providerJson);
+    if (!content) return null;
+    const match = content.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    const parsed = JSON.parse(match[0]) as Record<string, unknown>;
+    const name = typeof parsed.division_name === "string"
+      ? parsed.division_name.trim()
+      : "";
+    const reason = typeof parsed.alasan_singkat === "string"
+      ? parsed.alasan_singkat.trim()
+      : "";
+    if (!name) return null;
+    const hit = roster.find(
+      (d) => d.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (!hit) return null;
+    return {
+      division: hit,
+      reason: reason || `Instruksi terkait ${hit.name}.`,
+    };
+  } catch {
+    console.error("command-center: classify call failed");
+    return null;
+  }
+}
+
+// Live data for the routed division: its tasks per status + 5 latest.
+// For Quality Assurance & Security, also the security-incident history
+// and the 8 latest audit-log entries, so leak questions are answered
+// from real records instead of "belum tersedia".
+async function fetchDivisionSummary(
+  supabase: HqClient,
+  division: DivisionLead,
+): Promise<string | null> {
+  try {
+    const tasksRes = await supabase
+      .from("tasks")
+      .select("status, title, created_at")
+      .eq("department_id", division.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (tasksRes.error) {
+      console.error("command-center: division tasks fetch failed");
+      return null;
+    }
+    const tasks = Array.isArray(tasksRes.data) ? tasksRes.data : [];
+    const count = (status: string) =>
+      tasks.filter((t) => String(t.status) === status).length;
+    const lines: string[] = [
+      `Divisi: ${division.name} — Lead ${division.leadName} (${division.leadRole}).`,
+      `Tugas divisi: ${count("completed")} selesai, ${count("backlog")} backlog, ${count("in_review")} in review, ${count("in_progress")} berjalan, ${count("awaiting_approval")} menunggu persetujuan, ${count("blocked")} diblokir, ${count("cancelled")} dibatalkan.`,
+    ];
+    const latest = tasks.slice(0, 5);
+    if (latest.length > 0) {
+      lines.push("Tugas terbaru divisi:");
+      for (const t of latest) {
+        lines.push(
+          `- ${String(t.title)} (${String(t.status)}, ${formatWibShort(String(t.created_at))}).`,
+        );
+      }
+    } else {
+      lines.push("Tugas terbaru divisi: belum ada.");
+    }
+    if (division.name === "Quality Assurance & Security") {
+      lines.push("");
+      lines.push(SECURITY_HISTORY);
+      const auditRes = await supabase
+        .from("audit_logs")
+        .select("action, actor, created_at")
+        .order("created_at", { ascending: false })
+        .limit(8);
+      if (!auditRes.error && Array.isArray(auditRes.data)) {
+        lines.push("Log audit terbaru (8 entri):");
+        for (const row of auditRes.data as Array<Record<string, unknown>>) {
+          lines.push(
+            `- ${String(row.action)} — ${String(row.actor)} (${formatWibShort(String(row.created_at))}).`,
+          );
+        }
+      }
+    }
+    return lines.join("\n");
+  } catch {
+    console.error("command-center: division summary failed");
+    return null;
+  }
+}
+
 serve(async (req: Request) => {
   const preflight = handleOptions(req);
   if (preflight) return preflight;
@@ -301,32 +553,43 @@ serve(async (req: Request) => {
 
   const title = instruction.trim().slice(0, MAX_TITLE_LENGTH);
   const warnings: string[] = [];
+  const authHeader = req.headers.get("Authorization");
 
-  // 1. Task-plan skeleton: one backlog task.
-  const { data: task, error: taskError } = await supabase
-    .from("tasks")
-    .insert({ title, status: "backlog" })
-    .select("id, title, status")
-    .single();
-
-  if (taskError || !task) {
-    // Never log the request body / instruction.
-    console.error("command-center: tasks insert failed");
-    return jsonResponse({ error: "Failed to create task plan" }, 500);
+  // 1. Live roster, then classify the instruction to ONE division
+  // (small Groq call; keyword fallback when it fails or is unclear).
+  // Unrouted instructions stay with NARA.
+  let routing: Routing | null = null;
+  const roster = await fetchRoster(supabase);
+  if (roster) {
+    if (authHeader) {
+      const classified = await classifyDivision(
+        instruction.trim(),
+        roster,
+        supabaseUrl,
+        anonKey,
+        authHeader,
+      );
+      if (classified) {
+        routing = {
+          division: classified.division,
+          reason: classified.reason,
+          via: "groq",
+        };
+      }
+    }
+    if (!routing) {
+      const kw = classifyByKeywords(instruction.trim(), roster);
+      if (kw) {
+        routing = {
+          division: kw,
+          reason: `Instruksi mengandung kata kunci terkait ${kw.name}.`,
+          via: "keyword",
+        };
+      }
+    }
   }
 
-  // 2. Plan log (real task_logs columns: event_type + note).
-  const { error: planLogError } = await supabase.from("task_logs").insert({
-    task_id: task.id,
-    event_type: "plan_created",
-    note: "Plan created from a founder instruction.",
-  });
-  if (planLogError) {
-    console.error("command-center: plan task_logs insert failed");
-    warnings.push("task_log_not_recorded");
-  }
-
-  // 2b. Live platform catalog summary for the reply (best effort).
+  // 2. Live platform catalog summary for the reply (best effort).
   let systemPrompt = NARA_SYSTEM_PROMPT;
   const platformUrl = Deno.env.get("PLATFORM_API_URL");
   const platformKey = Deno.env.get("PLATFORM_API_KEY");
@@ -345,7 +608,7 @@ serve(async (req: Request) => {
     warnings.push("catalog_unavailable");
   }
 
-  // 2c. Live HQ data summary for the reply (best effort).
+  // 3. Live HQ data summary for the reply (best effort).
   const hqSummary = await fetchHqSummary(supabase);
   if (hqSummary) {
     systemPrompt +=
@@ -358,9 +621,27 @@ serve(async (req: Request) => {
     warnings.push("hq_data_unavailable");
   }
 
-  // 3. NARA reply via groq-proxy (forward the caller's JWT).
+  // 4. Live data for the routed division (best effort).
+  let divisionSummary: string | null = null;
+  if (routing) {
+    divisionSummary = await fetchDivisionSummary(supabase, routing.division);
+  }
+
+  // 5. Routing instruction + division data on top of the v7 prompt.
+  if (routing) {
+    systemPrompt +=
+      `\n\nPENGARAHAN: Jawablah sebagai ${routing.division.leadName}, Lead ${routing.division.name}. ` +
+      "Awali jawaban dengan nama dan divisimu. " +
+      "Jawab HANYA dari data yang diberikan; bila data tidak ada, katakan belum tersedia — jangan mengarang.";
+    if (divisionSummary) {
+      systemPrompt +=
+        `\n\nDATA DIVISI ${routing.division.name} (live, dibaca saat menjawab):\n` +
+        divisionSummary;
+    }
+  }
+
+  // 6. Lead reply via groq-proxy (forward the caller's JWT).
   let reply: string | null = null;
-  const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     warnings.push("agent_reply_failed");
   } else {
@@ -403,7 +684,47 @@ serve(async (req: Request) => {
     }
   }
 
-  // 4. Store the reply so the conversation history can show it.
+  // 7. Task-plan: one backlog task, carrying the routing + follow-up plan.
+  // (Created after the reply attempt, like v7 the plan still exists when
+  // the reply fails — only the task insert itself can fail this step.)
+  const rencana = routing
+    ? `${routing.division.leadName} menindaklanjuti — ${routing.reason}`
+    : "Jawab pertanyaan Founder dan pantau bila perlu tindak lanjut.";
+  const description = routing
+    ? `Divisi: ${routing.division.name} | Lead: ${routing.division.leadName} | Asal: NARA Command Center | Rencana: ${rencana}`
+    : `Divisi: - | Lead: NARA | Asal: NARA Command Center | Rencana: ${rencana}`;
+  const { data: task, error: taskError } = await supabase
+    .from("tasks")
+    .insert({
+      title,
+      status: "backlog",
+      description,
+      department_id: routing ? routing.division.id : null,
+      owner_agent_id: routing ? routing.division.leadId : null,
+    })
+    .select("id, title, status")
+    .single();
+
+  if (taskError || !task) {
+    // Never log the request body / instruction.
+    console.error("command-center: tasks insert failed");
+    return jsonResponse({ error: "Failed to create task plan" }, 500);
+  }
+
+  // 8. Plan log (real task_logs columns: event_type + note).
+  const { error: planLogError } = await supabase.from("task_logs").insert({
+    task_id: task.id,
+    event_type: "plan_created",
+    note: routing
+      ? `Plan created from a founder instruction. Routed to ${routing.division.name} (${routing.division.leadName}) via ${routing.via}.`
+      : "Plan created from a founder instruction.",
+  });
+  if (planLogError) {
+    console.error("command-center: plan task_logs insert failed");
+    warnings.push("task_log_not_recorded");
+  }
+
+  // 9. Store the reply so the conversation history can show it.
   if (reply) {
     const { error: replyLogError } = await supabase.from("task_logs").insert({
       task_id: task.id,
@@ -419,9 +740,20 @@ serve(async (req: Request) => {
 
   return jsonResponse({
     plan: { task_id: task.id, title: task.title, status: "backlog" },
+    routing: routing
+      ? {
+        division_id: routing.division.id,
+        division_name: routing.division.name,
+        lead_id: routing.division.leadId,
+        lead_name: routing.division.leadName,
+        via: routing.via,
+      }
+      : null,
     reply,
     message: reply
-      ? "Plan created. NARA replied."
+      ? (routing
+        ? `Plan created. ${routing.division.leadName} replied.`
+        : "Plan created. NARA replied.")
       : "Plan created. NARA could not reply yet.",
     ...(warnings.length > 0 ? { warnings } : {}),
   }, 200);
