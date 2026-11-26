@@ -52,6 +52,8 @@ export default function Reports() {
   const [usage, setUsage] = useState<LiveGroqUsage>({
     totalRequests: 0,
     totalTokens: 0,
+    todayRequests: 0,
+    todayTokens: 0,
   })
   const [tasks, setTasks] = useState<LiveTask[]>([])
   const [agents, setAgents] = useState<LiveAgent[]>([])
@@ -61,7 +63,12 @@ export default function Reports() {
   useEffect(() => {
     if (!session) {
       setReports([])
-      setUsage({ totalRequests: 0, totalTokens: 0 })
+      setUsage({
+        totalRequests: 0,
+        totalTokens: 0,
+        todayRequests: 0,
+        todayTokens: 0,
+      })
       setTasks([])
       setAgents([])
       setLogs([])
@@ -70,7 +77,12 @@ export default function Reports() {
     }
     Promise.all([
       safe(listReports(), []),
-      safe(getGroqUsage(), { totalRequests: 0, totalTokens: 0 }),
+      safe(getGroqUsage(), {
+        totalRequests: 0,
+        totalTokens: 0,
+        todayRequests: 0,
+        todayTokens: 0,
+      }),
       safe(listTasks(), []),
       safe(listAgents(), []),
       safe(listTaskLogs(), []),
@@ -201,13 +213,23 @@ export default function Reports() {
         <article className="card" aria-label="Biaya AI">
           <h2>Biaya AI</h2>
           <p>Penggunaan dan biaya provider AI per periode.</p>
-          <p>
-            {loading
-              ? 'Memuat…'
-              : usage.totalRequests === 0
-                ? 'Belum ada pemakaian Groq tercatat.'
-                : `Groq openai/gpt-oss-120b: ${usage.totalRequests} request · ${usage.totalTokens.toLocaleString('id-ID')} token · Rp0.`}
-          </p>
+          {loading ? (
+            <p>Memuat…</p>
+          ) : usage.totalRequests === 0 ? (
+            <p>Belum ada pemakaian Groq tercatat.</p>
+          ) : (
+            <>
+              <p>
+                Groq openai/gpt-oss-120b — Hari ini:{' '}
+                {usage.todayRequests} request ·{' '}
+                {usage.todayTokens.toLocaleString('id-ID')} token · Rp0.
+              </p>
+              <p>
+                Total sejak awal: {usage.totalRequests} request ·{' '}
+                {usage.totalTokens.toLocaleString('id-ID')} token · Rp0.
+              </p>
+            </>
+          )}
         </article>
 
         <article className="card" aria-label="Aktivitas mingguan">

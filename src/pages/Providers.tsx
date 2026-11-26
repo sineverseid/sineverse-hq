@@ -13,11 +13,31 @@ export default function Providers() {
   const [usage, setUsage] = useState<LiveGroqUsage>({
     totalRequests: 0,
     totalTokens: 0,
+    todayRequests: 0,
+    todayTokens: 0,
   })
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    if (!session) return
-    safe(getGroqUsage(), { totalRequests: 0, totalTokens: 0 }).then(setUsage)
+    if (!session) {
+      setUsage({
+        totalRequests: 0,
+        totalTokens: 0,
+        todayRequests: 0,
+        todayTokens: 0,
+      })
+      setLoaded(false)
+      return
+    }
+    safe(getGroqUsage(), {
+      totalRequests: 0,
+      totalTokens: 0,
+      todayRequests: 0,
+      todayTokens: 0,
+    }).then((liveUsage) => {
+      setUsage(liveUsage)
+      setLoaded(true)
+    })
   }, [session])
 
   return (
@@ -38,11 +58,26 @@ export default function Providers() {
           Kunci API Groq dikelola di sisi server (Edge Function groq-proxy)
           dan tidak pernah disimpan di aplikasi ini.
         </p>
-        <p>
-          Pemakaian tercatat di HQ baru:{' '}
-          {usage.totalRequests} request ·{' '}
-          {usage.totalTokens.toLocaleString('id-ID')} token · Rp0.
-        </p>
+        {!session ? (
+          <p>
+            Pemakaian tercatat di HQ baru: login sebagai Founder untuk
+            melihat pemakaian.
+          </p>
+        ) : !loaded ? (
+          <p>Pemakaian tercatat di HQ baru: Memuat…</p>
+        ) : (
+          <>
+            <p>
+              Pemakaian tercatat di HQ baru — Hari ini:{' '}
+              {usage.todayRequests} request ·{' '}
+              {usage.todayTokens.toLocaleString('id-ID')} token · Rp0.
+            </p>
+            <p>
+              Total sejak awal: {usage.totalRequests} request ·{' '}
+              {usage.totalTokens.toLocaleString('id-ID')} token · Rp0.
+            </p>
+          </>
+        )}
         <p>
           Pemakaian dihitung sejak HQ baru aktif 26 Nov 2026. Sebagai
           riwayat, HQ lama (Telegram) memakai 16 request · 10.609 token · Rp0

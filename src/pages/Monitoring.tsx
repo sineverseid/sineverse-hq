@@ -35,6 +35,8 @@ export default function Monitoring() {
   const [usage, setUsage] = useState<LiveGroqUsage>({
     totalRequests: 0,
     totalTokens: 0,
+    todayRequests: 0,
+    todayTokens: 0,
   })
   const [audit, setAudit] = useState<LiveAuditLog[]>([])
   const [tasks, setTasks] = useState<LiveTask[]>([])
@@ -56,7 +58,12 @@ export default function Monitoring() {
     Promise.all([
       safe(listScheduledJobs(), []),
       safe(listJobExecutions(), []),
-      safe(getGroqUsage(), { totalRequests: 0, totalTokens: 0 }),
+      safe(getGroqUsage(), {
+        totalRequests: 0,
+        totalTokens: 0,
+        todayRequests: 0,
+        todayTokens: 0,
+      }),
       safe(listAuditLogs(), []),
       safe(listTasks(), []),
       safe(listAgents(), []),
@@ -142,18 +149,37 @@ export default function Monitoring() {
 
       <section className="card" aria-label="Pemakaian AI">
         <h2>Pemakaian AI</h2>
-        <p>
-          Groq openai/gpt-oss-120b: {usage.totalRequests} request ·{' '}
-          {usage.totalTokens.toLocaleString('id-ID')} token · Rp0.
-        </p>
+        {!session ? (
+          <p>Login untuk melihat pemakaian AI.</p>
+        ) : !loaded ? (
+          <p>Memuat…</p>
+        ) : (
+          <>
+            <p>
+              Groq openai/gpt-oss-120b — Hari ini: {usage.todayRequests}{' '}
+              request · {usage.todayTokens.toLocaleString('id-ID')} token ·
+              Rp0.
+            </p>
+            <p>
+              Total sejak awal: {usage.totalRequests} request ·{' '}
+              {usage.totalTokens.toLocaleString('id-ID')} token · Rp0.
+            </p>
+          </>
+        )}
       </section>
 
       <section className="card" aria-label="Ringkasan data">
         <h2>Ringkasan Data</h2>
-        <p>
-          {tasks.length} tugas · {agents.length} agen · {reportCount} laporan
-          tersimpan.
-        </p>
+        {!session ? (
+          <p>Login untuk melihat ringkasan data.</p>
+        ) : !loaded ? (
+          <p>Memuat…</p>
+        ) : (
+          <p>
+            {tasks.length} tugas · {agents.length} agen · {reportCount}{' '}
+            laporan tersimpan.
+          </p>
+        )}
       </section>
 
       <section className="card" aria-label="Log audit">

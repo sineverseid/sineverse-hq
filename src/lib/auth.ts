@@ -426,22 +426,53 @@ export async function listJobExecutions(): Promise<LiveJobExecution[]> {
 export interface LiveGroqUsage {
   totalRequests: number
   totalTokens: number
+  /** Pemakaian pada hari berjalan (WIB). */
+  todayRequests: number
+  todayTokens: number
+}
+
+/**
+ * Awal hari berjalan dalam WIB sebagai ISO UTC — 00:00 WIB sama dengan
+ * 17:00 UTC pada hari sebelumnya.
+ */
+function startOfTodayWibIso(): string {
+  const now = new Date()
+  const wib = new Date(now.getTime() + 7 * 60 * 60 * 1000)
+  wib.setUTCHours(0, 0, 0, 0)
+  return new Date(wib.getTime() - 7 * 60 * 60 * 1000).toISOString()
 }
 
 export async function getGroqUsage(): Promise<LiveGroqUsage> {
-  if (!supabase) return { totalRequests: 0, totalTokens: 0 }
+  const empty: LiveGroqUsage = {
+    totalRequests: 0,
+    totalTokens: 0,
+    todayRequests: 0,
+    todayTokens: 0,
+  }
+  if (!supabase) return empty
   const { data, error } = await supabase
     .from('ai_usage_logs')
-    .select('prompt_tokens, completion_tokens')
+    .select('prompt_tokens, completion_tokens, created_at')
     .eq('provider', 'groq')
-  if (error || !data) return { totalRequests: 0, totalTokens: 0 }
+  if (error || !data) return empty
+  const todayStart = new Date(startOfTodayWibIso()).getTime()
+  let todayRequests = 0
+  let todayTokens = 0
+  const totalTokens = data.reduce((sum, row) => {
+    const tokens =
+      Number(row.prompt_tokens ?? 0) + Number(row.completion_tokens ?? 0)
+    const created = new Date(String(row.created_at ?? '')).getTime()
+    if (!Number.isNaN(created) && created >= todayStart) {
+      todayRequests += 1
+      todayTokens += tokens
+    }
+    return sum + tokens
+  }, 0)
   return {
     totalRequests: data.length,
-    totalTokens: data.reduce(
-      (sum, row) =>
-        sum + Number(row.prompt_tokens ?? 0) + Number(row.completion_tokens ?? 0),
-      0,
-    ),
+    totalTokens,
+    todayRequests,
+    todayTokens,
   }
 }
 

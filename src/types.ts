@@ -127,7 +127,7 @@ export const PERIODIC_SCHEDULE: ScheduleSlot[] = [
     frequency: 'weekly',
   },
   {
-    time: 'Akhir bulan',
+    time: 'Tanggal 1',
     title: 'Monthly Report',
     description: 'Laporan bulanan.',
     frequency: 'monthly',
