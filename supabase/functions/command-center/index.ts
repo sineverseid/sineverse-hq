@@ -31,6 +31,17 @@
 // task carries the routing + a follow-up plan (description +
 // owner_agent_id). Code fixes and deploys are NOT done here — that stays
 // with Nara in chat.
+// Execution v9 (26 Nov 2026): HQ knowledge base + new answer policy.
+// The function fetches the knowledge_base table (published docs) and adds
+// it as a PENGETAHUAN HQ block, so answers can draw on verified HQ
+// knowledge. The v7/v8 "belum tersedia" rule is REPLACED: never reply with
+// only "Data tentang X belum tersedia di HQ." — always answer from the
+// nearest verified data (catalog, DATA HQ, knowledge base, division tasks),
+// state honestly what is missing, and offer ONE concrete next step; for
+// ambiguous or mistyped questions, answer the most likely reading first,
+// then ask ONE clarifying question. Anti-hallucination guard stays:
+// never invent courses, numbers, or incidents; general knowledge outside
+// HQ data must be labelled "di luar data HQ".
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { corsHeaders, handleOptions, jsonResponse } from "../_shared/cors.ts";
@@ -51,13 +62,18 @@ const NARA_SYSTEM_PROMPT =
   "5. Editing Film (Minggu 9-10). 6. Tata Suara & Musik Film (Minggu 11-12). " +
   "7. Film Dokumenter (Minggu 13-14). 8. Mengenal Jobdesk Crew Film (Minggu 15-16). " +
   "9. Produksi & Manajemen Film (Minggu 17-18). 10. Akting untuk Kamera (Minggu 19-20). " +
-  "ATURAN: jawab hanya berdasarkan daftar di atas dan blok DATA HQ di bawah " +
-  "(bila ada). Jangan mengarang nama course, modul, atau materi, " +
-  "dan jangan menjawab dengan daftar generik tentang AI. Pertanyaan tentang " +
-  "jumlah atau angka HQ (agen, tugas, laporan, pemakaian AI, persetujuan) " +
-  "jawab HANYA dari blok DATA HQ. Bila data yang diminta tidak ada di daftar " +
-  "ini DAN tidak ada di blok DATA HQ, katakan terus terang bahwa data itu " +
-  "belum tersedia di HQ. " +
+  "KEBIJAKAN MENJAWAB: jawab SELALU dari data terverifikasi terdekat yang ada — " +
+  "daftar course di atas, blok DATA KATALOG PLATFORM, blok DATA HQ, blok PENGETAHUAN HQ, " +
+  "dan blok DATA DIVISI. Bila datum persisnya tidak ada, jangan berhenti di situ: berikan " +
+  "data terdekat yang nyata, sebutkan dengan jujur apa yang tidak ada di HQ, dan tawarkan " +
+  "SATU langkah berikutnya yang konkret (misalnya 'mau saya buatkan risetnya?'). Bila " +
+  "pertanyaan ambigu atau ada salah ketik, jawab dulu bacaan yang paling mungkin dari data " +
+  "yang ada, lalu ajukan SATU pertanyaan klarifikasi. DILARANG membalas HANYA dengan " +
+  "'Data tentang X belum tersedia di HQ.' sebagai keseluruhan jawaban. Jangan mengarang " +
+  "nama course, modul, materi, angka, atau insiden, dan jangan menjawab dengan daftar " +
+  "generik tentang AI. Bila memakai pengetahuan umum di luar data HQ, beri label jelas " +
+  "'di luar data HQ'. Pertanyaan tentang jumlah atau angka HQ (agen, tugas, laporan, " +
+  "pemakaian AI, persetujuan) jawab HANYA dari blok DATA HQ. " +
   "FORMAT JAWABAN: teks polos saja, supaya enak dibaca di HP. Dilarang memakai simbol Markdown " +
   "(tanpa **, tanpa ###, tanpa ---, tanpa tabel |). Pisahkan bagian dengan baris kosong. " +
   "Pakai poin bernomor pendek. Jawab ringkas.";
@@ -271,6 +287,46 @@ async function fetchHqSummary(
     return lines.join("\n");
   } catch {
     console.error("command-center: HQ data fetch failed");
+    return null;
+  }
+}
+
+// ---- v9: HQ knowledge base ----
+
+const MAX_KB_DOC_CHARS = 2000;
+const MAX_KB_TOTAL_CHARS = 8000;
+
+// Knowledge base (migration 003): title + content of published docs,
+// as a PENGETAHUAN HQ block. Best effort — never blocks the reply.
+async function fetchKnowledgeBlock(
+  supabase: HqClient,
+): Promise<string | null> {
+  try {
+    const res = await supabase
+      .from("knowledge_base")
+      .select("title, category, content")
+      .eq("status", "published")
+      .order("created_at", { ascending: true });
+    if (res.error) {
+      console.error("command-center: knowledge_base fetch failed");
+      return null;
+    }
+    const docs = Array.isArray(res.data) ? res.data : [];
+    if (docs.length === 0) return null;
+    const lines: string[] = [];
+    let total = 0;
+    for (const d of docs) {
+      const title = String(d.title ?? "Tanpa judul");
+      const category = String(d.category ?? "");
+      const content = String(d.content ?? "").slice(0, MAX_KB_DOC_CHARS);
+      const entry = `[${category}] ${title}\n${content}`;
+      if (total + entry.length > MAX_KB_TOTAL_CHARS) break;
+      total += entry.length;
+      lines.push(entry);
+    }
+    return lines.length > 0 ? lines.join("\n\n") : null;
+  } catch {
+    console.error("command-center: knowledge_base fetch failed");
     return null;
   }
 }
@@ -621,18 +677,32 @@ serve(async (req: Request) => {
     warnings.push("hq_data_unavailable");
   }
 
-  // 4. Live data for the routed division (best effort).
+  // 4. HQ knowledge base for the reply (best effort).
+  const knowledgeBlock = await fetchKnowledgeBlock(supabase);
+  if (knowledgeBlock) {
+    systemPrompt +=
+      "\n\nPENGETAHUAN HQ (dokumen knowledge base, dibaca saat menjawab):\n" +
+      knowledgeBlock +
+      "\nGunakan dokumen ini untuk menjawab pertanyaan tentang HQ, akademi, " +
+      "dan platform — ini data terverifikasi, bukan karangan.";
+  } else {
+    warnings.push("knowledge_unavailable");
+  }
+
+  // 5. Live data for the routed division (best effort).
   let divisionSummary: string | null = null;
   if (routing) {
     divisionSummary = await fetchDivisionSummary(supabase, routing.division);
   }
 
-  // 5. Routing instruction + division data on top of the v7 prompt.
+  // 6. Routing instruction + division data on top of the base prompt.
   if (routing) {
     systemPrompt +=
       `\n\nPENGARAHAN: Jawablah sebagai ${routing.division.leadName}, Lead ${routing.division.name}. ` +
       "Awali jawaban dengan nama dan divisimu. " +
-      "Jawab HANYA dari data yang diberikan; bila data tidak ada, katakan belum tersedia — jangan mengarang.";
+      "Ikuti KEBIJAKAN MENJAWAB di atas: bila datum persisnya tidak ada, beri data terdekat " +
+      "yang nyata, sebutkan apa yang tidak ada, dan tawarkan satu langkah berikutnya — jangan " +
+      "pernah membalas hanya dengan 'belum tersedia'.";
     if (divisionSummary) {
       systemPrompt +=
         `\n\nDATA DIVISI ${routing.division.name} (live, dibaca saat menjawab):\n` +
@@ -640,7 +710,7 @@ serve(async (req: Request) => {
     }
   }
 
-  // 6. Lead reply via groq-proxy (forward the caller's JWT).
+  // 7. Lead reply via groq-proxy (forward the caller's JWT).
   let reply: string | null = null;
   if (!authHeader) {
     warnings.push("agent_reply_failed");
@@ -684,7 +754,7 @@ serve(async (req: Request) => {
     }
   }
 
-  // 7. Task-plan: one backlog task, carrying the routing + follow-up plan.
+  // 8. Task-plan: one backlog task, carrying the routing + follow-up plan.
   // (Created after the reply attempt, like v7 the plan still exists when
   // the reply fails — only the task insert itself can fail this step.)
   const rencana = routing
@@ -711,7 +781,7 @@ serve(async (req: Request) => {
     return jsonResponse({ error: "Failed to create task plan" }, 500);
   }
 
-  // 8. Plan log (real task_logs columns: event_type + note).
+  // 9. Plan log (real task_logs columns: event_type + note).
   const { error: planLogError } = await supabase.from("task_logs").insert({
     task_id: task.id,
     event_type: "plan_created",
@@ -724,7 +794,7 @@ serve(async (req: Request) => {
     warnings.push("task_log_not_recorded");
   }
 
-  // 9. Store the reply so the conversation history can show it.
+  // 10. Store the reply so the conversation history can show it.
   if (reply) {
     const { error: replyLogError } = await supabase.from("task_logs").insert({
       task_id: task.id,
